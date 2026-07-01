@@ -5,6 +5,7 @@ import { api, setOnUnauthorized, type ProfileCreateData } from "./lib/api";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileForm } from "./components/ProfileForm";
 import { ProfileViewer } from "./components/ProfileViewer";
+import { ProfileWorkspace } from "./components/ProfileWorkspace";
 import { LaunchButton } from "./components/LaunchButton";
 import { StatusIndicator } from "./components/StatusIndicator";
 import { LoginPage } from "./components/LoginPage";
@@ -89,7 +90,19 @@ interface AppContentProps {
 }
 
 function AppContent({ authRequired, onLogout }: AppContentProps) {
-  const { profiles, loading, error, create, update, remove, launch, stop } = useProfiles();
+  const {
+    profiles,
+    loading,
+    error,
+    create,
+    update,
+    remove,
+    clone,
+    launch,
+    stop,
+    batchLaunch,
+    batchStop,
+  } = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("empty");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -127,17 +140,43 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     setView("empty");
   }, [selectedId, remove]);
 
-  const handleLaunch = useCallback(async () => {
-    if (!selectedId) return;
-    const result = await launch(selectedId);
-    if (result) setView("view");
-  }, [selectedId, launch]);
+  const handleLaunchProfile = useCallback(async (id: string) => {
+    const result = await launch(id);
+    if (result && selectedId === id) setView("view");
+  }, [launch, selectedId]);
 
-  const handleStop = useCallback(async () => {
-    if (!selectedId) return;
-    await stop(selectedId);
-    setView("edit");
+  const handleStopProfile = useCallback(async (id: string) => {
+    await stop(id);
+    if (selectedId === id) setView("edit");
   }, [selectedId, stop]);
+
+  const handleLaunchSelected = useCallback(async () => {
+    if (!selectedId) return;
+    await handleLaunchProfile(selectedId);
+  }, [handleLaunchProfile, selectedId]);
+
+  const handleStopSelected = useCallback(async () => {
+    if (!selectedId) return;
+    await handleStopProfile(selectedId);
+  }, [handleStopProfile, selectedId]);
+
+  const handleClone = useCallback(async (id: string) => {
+    const source = profiles.find((p) => p.id === id);
+    const profile = await clone(id, source ? `${source.name} Copy` : undefined);
+    if (profile) {
+      setSelectedId(profile.id);
+      setView("edit");
+    }
+  }, [clone, profiles]);
+
+  const handleBatchLaunch = useCallback(async (ids: string[]) => {
+    await batchLaunch(ids);
+  }, [batchLaunch]);
+
+  const handleBatchStop = useCallback(async (ids: string[]) => {
+    await batchStop(ids);
+    if (selectedId && ids.includes(selectedId)) setView("edit");
+  }, [batchStop, selectedId]);
 
   const handleVncDisconnect = useCallback(() => {
     setView("edit");
@@ -181,6 +220,10 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               <div className="flex items-center gap-2">
                 <StatusIndicator status={selected.status} size="md" />
                 <span className="text-sm font-medium">{selected.name}</span>
+                <span className="text-xs text-gray-500">{selected.group_name || "Default"}</span>
+                {selected.account_username && (
+                  <span className="text-xs text-gray-500">{selected.account_username}</span>
+                )}
                 <span className="text-xs text-gray-500 capitalize">{selected.platform}</span>
               </div>
             )}
@@ -189,8 +232,8 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             {selected && (
               <LaunchButton
                 status={selected.status}
-                onLaunch={handleLaunch}
-                onStop={handleStop}
+                onLaunch={handleLaunchSelected}
+                onStop={handleStopSelected}
               />
             )}
             {authRequired && (
@@ -215,11 +258,17 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
         {/* Content */}
         <div className="flex-1 overflow-y-auto overscroll-contain">
           {view === "empty" && (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <p className="text-gray-500 text-sm">Select a profile or create a new one</p>
-              </div>
-            </div>
+            <ProfileWorkspace
+              profiles={profiles}
+              selectedId={selectedId}
+              onSelect={handleSelect}
+              onNew={handleNew}
+              onLaunch={handleLaunchProfile}
+              onStop={handleStopProfile}
+              onBatchLaunch={handleBatchLaunch}
+              onBatchStop={handleBatchStop}
+              onClone={handleClone}
+            />
           )}
 
           {view === "create" && (

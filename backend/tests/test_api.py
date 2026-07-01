@@ -34,6 +34,10 @@ def test_create_profile(app_client: TestClient):
 def test_create_profile_with_all_fields(app_client: TestClient):
     resp = app_client.post("/api/profiles", json={
         "name": "Full",
+        "group_name": "Team A",
+        "account_platform": "Amazon",
+        "account_username": "seller@example.com",
+        "home_url": "https://sellercentral.amazon.com",
         "fingerprint_seed": 42,
         "proxy": "http://host:8080",
         "platform": "macos",
@@ -46,6 +50,10 @@ def test_create_profile_with_all_fields(app_client: TestClient):
     assert resp.status_code == 201
     data = resp.json()
     assert data["fingerprint_seed"] == 42
+    assert data["group_name"] == "Team A"
+    assert data["account_platform"] == "Amazon"
+    assert data["account_username"] == "seller@example.com"
+    assert data["home_url"] == "https://sellercentral.amazon.com"
     assert data["platform"] == "macos"
     assert len(data["tags"]) == 1
 
@@ -114,6 +122,41 @@ def test_delete_profile_stops_running(app_client: TestClient):
     main.browser_mgr.stop.assert_called_once_with(pid)
 
 
+def test_clone_profile_endpoint(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={
+        "name": "Original",
+        "group_name": "Shop",
+        "account_platform": "Etsy",
+        "fingerprint_seed": 12345,
+    })
+    pid = create.json()["id"]
+    resp = app_client.post(f"/api/profiles/{pid}/clone", json={"name": "Original Copy"})
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["name"] == "Original Copy"
+    assert data["group_name"] == "Shop"
+    assert data["account_platform"] == "Etsy"
+    assert data["fingerprint_seed"] != 12345
+
+
+def test_import_export_profiles(app_client: TestClient):
+    resp = app_client.post("/api/profiles/import", json={
+        "profiles": [
+            {
+                "name": "Imported",
+                "group_name": "Batch",
+                "account_username": "import@example.com",
+            }
+        ],
+    })
+    assert resp.status_code == 201
+    assert resp.json()[0]["name"] == "Imported"
+
+    export = app_client.get("/api/profiles/export")
+    assert export.status_code == 200
+    assert any(p["name"] == "Imported" for p in export.json())
+
+
 # ── Profile Status ───────────────────────────────────────────────────────────
 
 
@@ -172,6 +215,50 @@ def test_launch_failure_500(app_client: TestClient):
 def test_stop_not_running(app_client: TestClient):
     resp = app_client.post("/api/profiles/nonexistent/stop")
     assert resp.status_code == 404
+
+
+def test_batch_launch_profiles(app_client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    main.browser_mgr.running.clear()
+    one = app_client.post("/api/profiles", json={"name": "Batch One"}).json()
+    two = app_client.post("/api/profiles", json={"name": "Batch Two"}).json()
+
+    async def fake_launch(profile: dict):
+        mock_running = MagicMock(spec=RunningProfile)
+        mock_running.display = 100
+        mock_running.ws_port = 6100
+        mock_running.cdp_port = 5100
+        main.browser_mgr.running[profile["id"]] = mock_running
+        return mock_running
+
+    monkeypatch.setattr(main.browser_mgr, "launch", fake_launch)
+
+    resp = app_client.post("/api/profiles/batch/launch", json={"ids": [one["id"], two["id"]]})
+    assert resp.status_code == 200
+    assert [r["ok"] for r in resp.json()] == [True, True]
+
+    launched = app_client.get(f"/api/profiles/{one['id']}").json()
+    assert launched["last_launched_at"] is not None
+    main.browser_mgr.running.clear()
+
+
+def test_batch_stop_profiles(app_client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    profile = app_client.post("/api/profiles", json={"name": "Stop Batch"}).json()
+    main.browser_mgr.running[profile["id"]] = MagicMock(spec=RunningProfile)
+
+    async def fake_stop(profile_id: str):
+        main.browser_mgr.running.pop(profile_id, None)
+
+    monkeypatch.setattr(main.browser_mgr, "stop", fake_stop)
+
+    resp = app_client.post(
+        "/api/profiles/batch/stop",
+        json={"ids": [profile["id"], "missing"]},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data[0]["ok"] is True
+    assert data[0]["status"] == "stopped"
+    assert data[1]["ok"] is False
 
 
 # ── System Status ────────────────────────────────────────────────────────────

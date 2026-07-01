@@ -30,7 +30,11 @@ from .models import (
     ClipboardRequest,
     LaunchResponse,
     LoginRequest,
+    ProfileBatchRequest,
+    ProfileBatchResult,
+    ProfileCloneRequest,
     ProfileCreate,
+    ProfileImportRequest,
     ProfileResponse,
     ProfileStatusResponse,
     ProfileUpdate,
@@ -178,6 +182,16 @@ browser_mgr = BrowserManager()
 
 # Frontend build directory (React production build)
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "dist"
+
+
+def _profile_response(profile: dict) -> ProfileResponse:
+    """Attach runtime status to a stored profile dict."""
+    status = browser_mgr.get_status(profile["id"])
+    profile["status"] = status["status"]
+    profile["vnc_ws_port"] = status["vnc_ws_port"]
+    profile["cdp_url"] = status["cdp_url"]
+    profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
+    return ProfileResponse(**profile)
 
 
 # ---------------------------------------------------------------------------
@@ -438,15 +452,7 @@ async def auth_logout(request: Request, response: Response):
 @app.get("/api/profiles", response_model=list[ProfileResponse])
 async def list_profiles():
     profiles = db.list_profiles()
-    result = []
-    for p in profiles:
-        status = browser_mgr.get_status(p["id"])
-        p["status"] = status["status"]
-        p["vnc_ws_port"] = status["vnc_ws_port"]
-        p["cdp_url"] = status["cdp_url"]
-        p["tags"] = [TagResponse(**t) for t in p.get("tags", [])]
-        result.append(ProfileResponse(**p))
-    return result
+    return [_profile_response(p) for p in profiles]
 
 
 @app.post("/api/profiles", response_model=ProfileResponse, status_code=201)
@@ -458,12 +464,25 @@ async def create_profile(req: ProfileCreate):
     else:
         data["tags"] = []
     profile = db.create_profile(**data)
-    status = browser_mgr.get_status(profile["id"])
-    profile["status"] = status["status"]
-    profile["vnc_ws_port"] = status["vnc_ws_port"]
-    profile["cdp_url"] = status["cdp_url"]
-    profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
-    return ProfileResponse(**profile)
+    return _profile_response(profile)
+
+
+@app.get("/api/profiles/export", response_model=list[ProfileResponse])
+async def export_profiles():
+    profiles = db.list_profiles()
+    return [_profile_response(p) for p in profiles]
+
+
+@app.post("/api/profiles/import", response_model=list[ProfileResponse], status_code=201)
+async def import_profiles(req: ProfileImportRequest):
+    imported = []
+    for item in req.profiles:
+        data = item.model_dump()
+        tags = data.pop("tags", None)
+        data["tags"] = [t.model_dump() if hasattr(t, "model_dump") else t for t in (tags or [])]
+        profile = db.create_profile(**data)
+        imported.append(_profile_response(profile))
+    return imported
 
 
 @app.get("/api/profiles/{profile_id}", response_model=ProfileResponse)
@@ -471,12 +490,7 @@ async def get_profile(profile_id: str):
     profile = db.get_profile(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    status = browser_mgr.get_status(profile_id)
-    profile["status"] = status["status"]
-    profile["vnc_ws_port"] = status["vnc_ws_port"]
-    profile["cdp_url"] = status["cdp_url"]
-    profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
-    return ProfileResponse(**profile)
+    return _profile_response(profile)
 
 
 @app.put("/api/profiles/{profile_id}", response_model=ProfileResponse)
@@ -489,12 +503,7 @@ async def update_profile(profile_id: str, req: ProfileUpdate):
     profile = db.update_profile(profile_id, **data)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    status = browser_mgr.get_status(profile_id)
-    profile["status"] = status["status"]
-    profile["vnc_ws_port"] = status["vnc_ws_port"]
-    profile["cdp_url"] = status["cdp_url"]
-    profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
-    return ProfileResponse(**profile)
+    return _profile_response(profile)
 
 
 @app.delete("/api/profiles/{profile_id}")
@@ -519,7 +528,57 @@ async def delete_profile(profile_id: str):
     return {"ok": True}
 
 
+@app.post("/api/profiles/{profile_id}/clone", response_model=ProfileResponse, status_code=201)
+async def clone_profile(profile_id: str, req: ProfileCloneRequest):
+    profile = db.clone_profile(
+        profile_id,
+        name=req.name,
+        keep_fingerprint=req.keep_fingerprint,
+    )
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return _profile_response(profile)
+
+
 # ── Launch / Stop ─────────────────────────────────────────────────────────────
+
+
+@app.post("/api/profiles/batch/launch", response_model=list[ProfileBatchResult])
+async def batch_launch_profiles(req: ProfileBatchRequest):
+    results: list[ProfileBatchResult] = []
+    for profile_id in req.ids:
+        profile = db.get_profile(profile_id)
+        if not profile:
+            results.append(ProfileBatchResult(profile_id=profile_id, ok=False, detail="Profile not found"))
+            continue
+        if profile_id in browser_mgr.running:
+            results.append(ProfileBatchResult(profile_id=profile_id, ok=True, status="running", detail="Already running"))
+            continue
+        try:
+            await browser_mgr.launch(profile)
+            db.mark_profile_launched(profile_id)
+            results.append(ProfileBatchResult(profile_id=profile_id, ok=True, status="running"))
+        except ValueError as exc:
+            results.append(ProfileBatchResult(profile_id=profile_id, ok=False, detail=str(exc)))
+        except Exception as exc:
+            logger.error("Batch launch failed for profile %s: %s", profile_id, exc)
+            results.append(ProfileBatchResult(profile_id=profile_id, ok=False, detail="Failed to launch browser"))
+    return results
+
+
+@app.post("/api/profiles/batch/stop", response_model=list[ProfileBatchResult])
+async def batch_stop_profiles(req: ProfileBatchRequest):
+    results: list[ProfileBatchResult] = []
+    for profile_id in req.ids:
+        if not db.get_profile(profile_id):
+            results.append(ProfileBatchResult(profile_id=profile_id, ok=False, detail="Profile not found"))
+            continue
+        if profile_id not in browser_mgr.running:
+            results.append(ProfileBatchResult(profile_id=profile_id, ok=True, status="stopped", detail="Already stopped"))
+            continue
+        await browser_mgr.stop(profile_id)
+        results.append(ProfileBatchResult(profile_id=profile_id, ok=True, status="stopped"))
+    return results
 
 
 @app.post("/api/profiles/{profile_id}/launch", response_model=LaunchResponse)
@@ -537,6 +596,8 @@ async def launch_profile(profile_id: str):
     except Exception as exc:
         logger.error("Failed to launch profile %s: %s", profile_id, exc)
         raise HTTPException(status_code=500, detail="Failed to launch browser")
+
+    db.mark_profile_launched(profile_id)
 
     return LaunchResponse(
         profile_id=profile_id,

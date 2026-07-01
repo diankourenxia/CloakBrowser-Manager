@@ -52,23 +52,26 @@ const GPU_PRESETS: Record<string, { vendor: string; renderer: string }> = {
   },
 };
 
+const DEFAULT_PROFILE_FORM: ProfileCreateData = {
+  name: "",
+  group_name: "Default",
+  platform: "windows",
+  screen_width: 1920,
+  screen_height: 1080,
+  humanize: false,
+  human_preset: "default",
+  headless: false,
+  geoip: false,
+  clipboard_sync: true,
+  auto_launch: false,
+  launch_args: [],
+  tags: [],
+};
+
 export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileFormProps) {
   const isEdit = profile !== null;
 
-  const [form, setForm] = useState<ProfileCreateData>({
-    name: "",
-    platform: "windows",
-    screen_width: 1920,
-    screen_height: 1080,
-    humanize: false,
-    human_preset: "default",
-    headless: false,
-    geoip: false,
-    clipboard_sync: true,
-    auto_launch: false,
-    launch_args: [],
-    tags: [],
-  });
+  const [form, setForm] = useState<ProfileCreateData>(DEFAULT_PROFILE_FORM);
 
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -80,6 +83,10 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
     if (profile) {
       setForm({
         name: profile.name,
+        group_name: profile.group_name,
+        account_platform: profile.account_platform,
+        account_username: profile.account_username,
+        home_url: profile.home_url,
         fingerprint_seed: profile.fingerprint_seed,
         proxy: profile.proxy,
         timezone: profile.timezone,
@@ -102,6 +109,8 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
         notes: profile.notes,
         tags: profile.tags ?? [],
       });
+    } else {
+      setForm(DEFAULT_PROFILE_FORM);
     }
   }, [profile?.id]);
 
@@ -214,6 +223,42 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                 onChange={(e) => set("name", e.target.value)}
                 placeholder="e.g. Amazon Seller #1"
                 required
+              />
+            </div>
+            <div>
+              <label className="label">Group</label>
+              <input
+                className="input"
+                value={form.group_name ?? "Default"}
+                onChange={(e) => set("group_name", e.target.value || "Default")}
+                placeholder="Default"
+              />
+            </div>
+            <div>
+              <label className="label">Account Platform</label>
+              <input
+                className="input"
+                value={form.account_platform ?? ""}
+                onChange={(e) => set("account_platform", e.target.value || null)}
+                placeholder="Amazon, TikTok, Meta..."
+              />
+            </div>
+            <div>
+              <label className="label">Account Username</label>
+              <input
+                className="input"
+                value={form.account_username ?? ""}
+                onChange={(e) => set("account_username", e.target.value || null)}
+                placeholder="seller@example.com"
+              />
+            </div>
+            <div>
+              <label className="label">Home URL</label>
+              <input
+                className="input"
+                value={form.home_url ?? ""}
+                onChange={(e) => set("home_url", e.target.value || null)}
+                placeholder="https://example.com/dashboard"
               />
             </div>
             <div>

@@ -57,7 +57,11 @@ Each CloakBrowser profile generates a completely different device identity. To t
 ## Features
 
 - **Profile management** — create, edit, delete browser profiles with unique fingerprints
+- **Account workspace** — organize profiles by group, account platform, username, and home URL
 - **Per-profile settings** — fingerprint seed, proxy, timezone, locale, user agent, screen size, platform
+- **Batch operations** — select multiple profiles and launch or stop them together
+- **Profile cloning** — duplicate profile settings into a fresh isolated identity for a new account
+- **Import/export** — move profile definitions through JSON API endpoints
 - **One-click launch/stop** — each profile runs as an isolated CloakBrowser instance
 - **Session persistence** — cookies, localStorage, and cache survive browser restarts
 - **In-browser viewing** — interact with launched browsers via noVNC, directly in the web GUI
@@ -78,10 +82,9 @@ Each CloakBrowser profile generates a completely different device identity. To t
 ### Backend
 
 ```bash
-cd backend
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8080
+pip install -r backend/requirements.txt
+DATA_DIR=.local-data uvicorn backend.main:app --reload --port 8080
 ```
 
 ### Frontend

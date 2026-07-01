@@ -11,6 +11,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from cloakbrowser import launch_persistent_context_async
 
@@ -51,6 +52,14 @@ def _validate_proxy(url: str) -> None:
         raise ValueError(f"Proxy URL missing hostname: {url}")
     if not parsed.port:
         raise ValueError(f"Proxy URL missing port: {url}")
+
+
+def _normalize_home_url(raw: str) -> str:
+    """Make a human-entered home URL navigable by Chromium."""
+    parsed = urlparse(raw)
+    if parsed.scheme:
+        return raw
+    return f"https://{raw}"
 
 
 def _init_profile_defaults(user_data_dir: Path) -> None:
@@ -255,6 +264,18 @@ class BrowserManager:
                     await p.evaluate(_clipboard_init_js)
                 except Exception as exc:
                     logger.debug("Clipboard init failed on existing page: %s", exc)
+
+            home_url = (profile.get("home_url") or "").strip()
+            if home_url:
+                try:
+                    page = context.pages[0] if context.pages else await context.new_page()
+                    await page.goto(
+                        _normalize_home_url(home_url),
+                        wait_until="domcontentloaded",
+                        timeout=20_000,
+                    )
+                except Exception as exc:
+                    logger.warning("Failed to open home URL for %s: %s", profile_id, exc)
 
             running = RunningProfile(
                 profile_id=profile_id,

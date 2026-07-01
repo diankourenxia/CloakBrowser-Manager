@@ -13,9 +13,19 @@ interface ProfileListProps {
 export function ProfileList({ profiles, selectedId, onSelect, onNew }: ProfileListProps) {
   const [search, setSearch] = useState("");
 
-  const filtered = profiles.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filtered = profiles.filter((p) => {
+    const q = search.toLowerCase();
+    return [
+      p.name,
+      p.group_name,
+      p.account_platform,
+      p.account_username,
+      p.home_url,
+      ...p.tags.map((t) => t.tag),
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(q));
+  });
 
   const runningCount = profiles.filter((p) => p.status === "running").length;
 
@@ -67,6 +77,8 @@ export function ProfileList({ profiles, selectedId, onSelect, onNew }: ProfileLi
               <span className="text-sm font-medium truncate">{profile.name}</span>
             </div>
             <div className="flex items-center gap-2 mt-1 ml-4">
+              <span className="text-xs text-gray-500 truncate max-w-[90px]">{profile.group_name || "Default"}</span>
+              <span className="text-xs text-gray-600">·</span>
               <span className="text-xs text-gray-500 capitalize">{profile.platform}</span>
               {profile.proxy && (
                 <>
@@ -75,6 +87,11 @@ export function ProfileList({ profiles, selectedId, onSelect, onNew }: ProfileLi
                 </>
               )}
             </div>
+            {(profile.account_platform || profile.account_username) && (
+              <div className="text-xs text-gray-500 mt-1 ml-4 truncate">
+                {[profile.account_platform, profile.account_username].filter(Boolean).join(" / ")}
+              </div>
+            )}
             {profile.tags.length > 0 && (
               <div className="flex gap-1 mt-1.5 ml-4 flex-wrap">
                 {profile.tags.map((t) => (

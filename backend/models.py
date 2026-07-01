@@ -7,8 +7,22 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 
+class TagCreate(BaseModel):
+    tag: str
+    color: str | None = None  # hex color
+
+
+class TagResponse(BaseModel):
+    tag: str
+    color: str | None = None
+
+
 class ProfileCreate(BaseModel):
     name: str
+    group_name: str = "Default"
+    account_platform: str | None = None
+    account_username: str | None = None
+    home_url: str | None = None
     fingerprint_seed: int | None = None  # random if not set
     proxy: str | None = None  # "http://user:pass@host:port" or null
     timezone: str | None = None  # "America/New_York"
@@ -34,6 +48,10 @@ class ProfileCreate(BaseModel):
 
 class ProfileUpdate(BaseModel):
     name: str | None = None
+    group_name: str | None = None
+    account_platform: str | None = Field(default=None)
+    account_username: str | None = Field(default=None)
+    home_url: str | None = Field(default=None)
     fingerprint_seed: int | None = None
     proxy: str | None = Field(default=None)
     timezone: str | None = Field(default=None)
@@ -57,19 +75,33 @@ class ProfileUpdate(BaseModel):
     tags: list[TagCreate] | None = None
 
 
-class TagCreate(BaseModel):
-    tag: str
-    color: str | None = None  # hex color
+class ProfileCloneRequest(BaseModel):
+    name: str | None = None
+    keep_fingerprint: bool = False
 
 
-class TagResponse(BaseModel):
-    tag: str
-    color: str | None = None
+class ProfileBatchRequest(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=50)
+
+
+class ProfileBatchResult(BaseModel):
+    profile_id: str
+    ok: bool
+    status: str | None = None
+    detail: str | None = None
+
+
+class ProfileImportRequest(BaseModel):
+    profiles: list[ProfileCreate] = Field(min_length=1, max_length=200)
 
 
 class ProfileResponse(BaseModel):
     id: str
     name: str
+    group_name: str = "Default"
+    account_platform: str | None = None
+    account_username: str | None = None
+    home_url: str | None = None
     fingerprint_seed: int
     proxy: str | None = None
     timezone: str | None = None
@@ -99,6 +131,7 @@ class ProfileResponse(BaseModel):
     user_data_dir: str
     created_at: str
     updated_at: str
+    last_launched_at: str | None = None
     tags: list[TagResponse] = []
     status: str = "stopped"  # "running" | "stopped"
     vnc_ws_port: int | None = None

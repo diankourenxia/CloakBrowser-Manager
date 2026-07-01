@@ -55,6 +55,10 @@ def test_create_profile_with_seed(tmp_db: Path):
 def test_create_profile_all_fields(tmp_db: Path):
     p = db.create_profile(
         "Full",
+        group_name="Team A",
+        account_platform="Amazon",
+        account_username="seller@example.com",
+        home_url="https://sellercentral.amazon.com",
         fingerprint_seed=99999,
         proxy="http://host:8080",
         timezone="America/New_York",
@@ -74,6 +78,10 @@ def test_create_profile_all_fields(tmp_db: Path):
         notes="test note",
     )
     assert p["proxy"] == "http://host:8080"
+    assert p["group_name"] == "Team A"
+    assert p["account_platform"] == "Amazon"
+    assert p["account_username"] == "seller@example.com"
+    assert p["home_url"] == "https://sellercentral.amazon.com"
     assert p["platform"] == "macos"
     assert p["gpu_vendor"] == "NVIDIA"
     assert p["hardware_concurrency"] == 16
@@ -97,6 +105,7 @@ def test_create_profile_with_tags(tmp_db: Path):
 
 def test_create_profile_defaults(tmp_db: Path):
     p = db.create_profile("Defaults")
+    assert p["group_name"] == "Default"
     assert p["platform"] == "windows"
     assert p["screen_width"] == 1920
     assert p["screen_height"] == 1080
@@ -207,6 +216,38 @@ def test_update_profile_no_fields(sample_profile: dict):
     # No-op update — profile should be unchanged
     updated = db.update_profile(sample_profile["id"])
     assert updated["name"] == sample_profile["name"]
+
+
+def test_clone_profile_copies_account_settings_with_new_identity(tmp_db: Path):
+    source = db.create_profile(
+        "Source",
+        fingerprint_seed=22222,
+        group_name="Marketplaces",
+        account_platform="TikTok",
+        account_username="creator@example.com",
+        home_url="tiktok.com",
+        proxy="http://proxy:8080",
+        tags=[{"tag": "warm", "color": "#22c55e"}],
+    )
+    cloned = db.clone_profile(source["id"], name="Clone")
+    assert cloned is not None
+    assert cloned["name"] == "Clone"
+    assert cloned["id"] != source["id"]
+    assert cloned["fingerprint_seed"] != source["fingerprint_seed"]
+    assert cloned["user_data_dir"] != source["user_data_dir"]
+    assert cloned["group_name"] == "Marketplaces"
+    assert cloned["account_platform"] == "TikTok"
+    assert cloned["account_username"] == "creator@example.com"
+    assert cloned["proxy"] == "http://proxy:8080"
+    assert cloned["tags"][0]["tag"] == "warm"
+
+
+def test_mark_profile_launched_sets_timestamp(tmp_db: Path):
+    profile = db.create_profile("Launch Stamp")
+    assert profile["last_launched_at"] is None
+    updated = db.mark_profile_launched(profile["id"])
+    assert updated is not None
+    assert updated["last_launched_at"] is not None
 
 
 def test_update_profile_updates_timestamp(sample_profile: dict):

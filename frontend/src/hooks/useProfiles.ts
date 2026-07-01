@@ -63,6 +63,19 @@ export function useProfiles() {
     [],
   );
 
+  const clone = useCallback(
+    async (id: string, name?: string): Promise<Profile | undefined> => {
+      try {
+        const profile = await api.cloneProfile(id, name);
+        setProfiles((prev) => [profile, ...prev]);
+        return profile;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to clone profile");
+      }
+    },
+    [],
+  );
+
   const launch = useCallback(
     async (id: string) => {
       try {
@@ -88,5 +101,48 @@ export function useProfiles() {
     [refresh],
   );
 
-  return { profiles, loading, error, refresh, create, update, remove, launch, stop };
+  const batchLaunch = useCallback(
+    async (ids: string[]) => {
+      try {
+        const results = await api.batchLaunchProfiles(ids);
+        await refresh();
+        const failed = results.filter((r) => !r.ok);
+        if (failed.length > 0) {
+          setError(`${failed.length} profile${failed.length === 1 ? "" : "s"} failed to launch`);
+        }
+        return results;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to launch selected profiles");
+      }
+    },
+    [refresh],
+  );
+
+  const batchStop = useCallback(
+    async (ids: string[]) => {
+      try {
+        const results = await api.batchStopProfiles(ids);
+        await refresh();
+        return results;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to stop selected profiles");
+      }
+    },
+    [refresh],
+  );
+
+  return {
+    profiles,
+    loading,
+    error,
+    refresh,
+    create,
+    update,
+    remove,
+    clone,
+    launch,
+    stop,
+    batchLaunch,
+    batchStop,
+  };
 }

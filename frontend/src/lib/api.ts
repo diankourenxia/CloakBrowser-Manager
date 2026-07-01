@@ -5,6 +5,10 @@
 export interface Profile {
   id: string;
   name: string;
+  group_name: string;
+  account_platform: string | null;
+  account_username: string | null;
+  home_url: string | null;
   fingerprint_seed: number;
   proxy: string | null;
   timezone: string | null;
@@ -28,6 +32,7 @@ export interface Profile {
   user_data_dir: string;
   created_at: string;
   updated_at: string;
+  last_launched_at: string | null;
   tags: { tag: string; color: string | null }[];
   status: "running" | "stopped";
   vnc_ws_port: number | null;
@@ -36,6 +41,10 @@ export interface Profile {
 
 export interface ProfileCreateData {
   name: string;
+  group_name?: string;
+  account_platform?: string | null;
+  account_username?: string | null;
+  home_url?: string | null;
   fingerprint_seed?: number | null;
   proxy?: string | null;
   timezone?: string | null;
@@ -71,6 +80,13 @@ export interface SystemStatus {
   running_count: number;
   binary_version: string;
   profiles_total: number;
+}
+
+export interface BatchResult {
+  profile_id: string;
+  ok: boolean;
+  status: string | null;
+  detail: string | null;
 }
 
 class ApiError extends Error {
@@ -136,6 +152,20 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  cloneProfile: (id: string, name?: string) =>
+    request<Profile>(`/api/profiles/${id}/clone`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+
+  importProfiles: (profiles: ProfileCreateData[]) =>
+    request<Profile[]>("/api/profiles/import", {
+      method: "POST",
+      body: JSON.stringify({ profiles }),
+    }),
+
+  exportProfiles: () => request<Profile[]>("/api/profiles/export"),
+
   deleteProfile: (id: string) =>
     request<{ ok: boolean }>(`/api/profiles/${id}`, { method: "DELETE" }),
 
@@ -144,6 +174,18 @@ export const api = {
 
   stopProfile: (id: string) =>
     request<{ ok: boolean }>(`/api/profiles/${id}/stop`, { method: "POST" }),
+
+  batchLaunchProfiles: (ids: string[]) =>
+    request<BatchResult[]>("/api/profiles/batch/launch", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
+
+  batchStopProfiles: (ids: string[]) =>
+    request<BatchResult[]>("/api/profiles/batch/stop", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
 
   getStatus: () => request<SystemStatus>("/api/status"),
 

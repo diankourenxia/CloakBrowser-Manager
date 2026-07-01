@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import random
 import sqlite3
 import uuid
@@ -11,7 +12,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-DATA_DIR = Path("/data")
+DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 DB_PATH = DATA_DIR / "profiles.db"
 
 
@@ -34,6 +35,10 @@ def init_db():
             CREATE TABLE IF NOT EXISTS profiles (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
+                group_name TEXT DEFAULT 'Default',
+                account_platform TEXT,
+                account_username TEXT,
+                home_url TEXT,
                 fingerprint_seed INTEGER NOT NULL,
                 proxy TEXT,
                 timezone TEXT,
@@ -55,7 +60,8 @@ def init_db():
                 notes TEXT,
                 user_data_dir TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                last_launched_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS profile_tags (
@@ -78,6 +84,16 @@ def init_db():
         if "auto_launch" not in cols:
             conn.execute("ALTER TABLE profiles ADD COLUMN auto_launch BOOLEAN DEFAULT 0")
             conn.commit()
+        for col, ddl in (
+            ("group_name", "ALTER TABLE profiles ADD COLUMN group_name TEXT DEFAULT 'Default'"),
+            ("account_platform", "ALTER TABLE profiles ADD COLUMN account_platform TEXT"),
+            ("account_username", "ALTER TABLE profiles ADD COLUMN account_username TEXT"),
+            ("home_url", "ALTER TABLE profiles ADD COLUMN home_url TEXT"),
+            ("last_launched_at", "ALTER TABLE profiles ADD COLUMN last_launched_at TEXT"),
+        ):
+            if col not in cols:
+                conn.execute(ddl)
+                conn.commit()
 
 
 def _now() -> str:
@@ -98,14 +114,20 @@ def create_profile(
     with get_db() as conn:
         conn.execute(
             """INSERT INTO profiles (
-                id, name, fingerprint_seed, proxy, timezone, locale, platform,
+                id, name, group_name, account_platform, account_username, home_url,
+                fingerprint_seed, proxy, timezone, locale, platform,
                 user_agent, screen_width, screen_height, gpu_vendor, gpu_renderer,
                 hardware_concurrency, humanize, human_preset, headless, geoip,
                 clipboard_sync, auto_launch, color_scheme, launch_args, notes,
                 user_data_dir, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                profile_id, name, seed,
+                profile_id, name,
+                fields.get("group_name") or "Default",
+                fields.get("account_platform"),
+                fields.get("account_username"),
+                fields.get("home_url"),
+                seed,
                 fields.get("proxy"),
                 fields.get("timezone"),
                 fields.get("locale"),
@@ -184,10 +206,12 @@ def update_profile(profile_id: str, **fields: Any) -> dict[str, Any] | None:
         fields["launch_args"] = json.dumps(fields["launch_args"] or [])
 
     for col in (
-        "name", "fingerprint_seed", "proxy", "timezone", "locale", "platform",
+        "name", "group_name", "account_platform", "account_username", "home_url",
+        "fingerprint_seed", "proxy", "timezone", "locale", "platform",
         "user_agent", "screen_width", "screen_height", "gpu_vendor", "gpu_renderer",
         "hardware_concurrency", "humanize", "human_preset", "headless", "geoip",
         "clipboard_sync", "auto_launch", "color_scheme", "launch_args", "notes",
+        "last_launched_at",
     ):
         if col in fields:
             update_cols.append(f"{col} = ?")
@@ -222,3 +246,35 @@ def delete_profile(profile_id: str) -> bool:
         cursor = conn.execute("DELETE FROM profiles WHERE id = ?", (profile_id,))
         conn.commit()
         return cursor.rowcount > 0
+
+
+def clone_profile(
+    profile_id: str,
+    *,
+    name: str | None = None,
+    keep_fingerprint: bool = False,
+) -> dict[str, Any] | None:
+    """Create a new isolated profile using another profile's settings."""
+    source = get_profile(profile_id)
+    if not source:
+        return None
+
+    fields = {
+        key: source[key]
+        for key in (
+            "group_name", "account_platform", "account_username", "home_url",
+            "proxy", "timezone", "locale", "platform", "user_agent",
+            "screen_width", "screen_height", "gpu_vendor", "gpu_renderer",
+            "hardware_concurrency", "humanize", "human_preset", "headless",
+            "geoip", "clipboard_sync", "auto_launch", "color_scheme",
+            "launch_args", "notes", "tags",
+        )
+    }
+    seed = source["fingerprint_seed"] if keep_fingerprint else None
+    clone_name = name or f"{source['name']} Copy"
+    return create_profile(clone_name, fingerprint_seed=seed, **fields)
+
+
+def mark_profile_launched(profile_id: str) -> dict[str, Any] | None:
+    """Update launch metadata after a profile starts successfully."""
+    return update_profile(profile_id, last_launched_at=_now())
