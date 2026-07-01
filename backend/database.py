@@ -35,14 +35,14 @@ def init_db():
             CREATE TABLE IF NOT EXISTS profiles (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                group_name TEXT DEFAULT 'Default',
+                group_name TEXT DEFAULT '默认',
                 account_platform TEXT,
                 account_username TEXT,
                 home_url TEXT,
                 fingerprint_seed INTEGER NOT NULL,
                 proxy TEXT,
-                timezone TEXT,
-                locale TEXT,
+                timezone TEXT DEFAULT 'Asia/Shanghai',
+                locale TEXT DEFAULT 'zh-CN',
                 platform TEXT DEFAULT 'windows',
                 user_agent TEXT,
                 screen_width INTEGER DEFAULT 1920,
@@ -85,7 +85,7 @@ def init_db():
             conn.execute("ALTER TABLE profiles ADD COLUMN auto_launch BOOLEAN DEFAULT 0")
             conn.commit()
         for col, ddl in (
-            ("group_name", "ALTER TABLE profiles ADD COLUMN group_name TEXT DEFAULT 'Default'"),
+            ("group_name", "ALTER TABLE profiles ADD COLUMN group_name TEXT DEFAULT '默认'"),
             ("account_platform", "ALTER TABLE profiles ADD COLUMN account_platform TEXT"),
             ("account_username", "ALTER TABLE profiles ADD COLUMN account_username TEXT"),
             ("home_url", "ALTER TABLE profiles ADD COLUMN home_url TEXT"),
@@ -123,14 +123,14 @@ def create_profile(
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 profile_id, name,
-                fields.get("group_name") or "Default",
+                fields.get("group_name") or "默认",
                 fields.get("account_platform"),
                 fields.get("account_username"),
                 fields.get("home_url"),
                 seed,
                 fields.get("proxy"),
-                fields.get("timezone"),
-                fields.get("locale"),
+                fields.get("timezone") or "Asia/Shanghai",
+                fields.get("locale") or "zh-CN",
                 fields.get("platform", "windows"),
                 fields.get("user_agent"),
                 fields.get("screen_width", 1920),
@@ -271,7 +271,7 @@ def clone_profile(
         )
     }
     seed = source["fingerprint_seed"] if keep_fingerprint else None
-    clone_name = name or f"{source['name']} Copy"
+    clone_name = name or f"{source['name']} 副本"
     return create_profile(clone_name, fingerprint_seed=seed, **fields)
 
 

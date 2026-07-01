@@ -40,7 +40,7 @@ export default function App() {
   if (authState === "checking") {
     return (
       <div className="h-screen flex items-center justify-center">
-        <div className="text-gray-500 text-sm">Loading...</div>
+        <div className="text-gray-500 text-sm">加载中...</div>
       </div>
     );
   }
@@ -49,7 +49,7 @@ export default function App() {
     return (
       <div className="h-screen flex items-center justify-center bg-surface-0">
         <div className="text-center">
-          <p className="text-red-400 text-sm mb-2">Unable to reach the server</p>
+          <p className="text-red-400 text-sm mb-2">无法连接服务</p>
           <button
             onClick={() => {
               setAuthState("checking");
@@ -62,7 +62,7 @@ export default function App() {
             }}
             className="text-xs text-gray-400 hover:text-gray-200 underline"
           >
-            Retry
+            重试
           </button>
         </div>
       </div>
@@ -162,7 +162,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
 
   const handleClone = useCallback(async (id: string) => {
     const source = profiles.find((p) => p.id === id);
-    const profile = await clone(id, source ? `${source.name} Copy` : undefined);
+    const profile = await clone(id, source ? `${source.name} 副本` : undefined);
     if (profile) {
       setSelectedId(profile.id);
       setView("edit");
@@ -185,7 +185,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center">
-        <div className="text-gray-500 text-sm">Loading...</div>
+        <div className="text-gray-500 text-sm">加载中...</div>
       </div>
     );
   }
@@ -212,7 +212,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="text-gray-500 hover:text-gray-300 p-1"
-              title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+              title={sidebarOpen ? "隐藏侧栏" : "显示侧栏"}
             >
               {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
             </button>
@@ -220,7 +220,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               <div className="flex items-center gap-2">
                 <StatusIndicator status={selected.status} size="md" />
                 <span className="text-sm font-medium">{selected.name}</span>
-                <span className="text-xs text-gray-500">{selected.group_name || "Default"}</span>
+                <span className="text-xs text-gray-500">{selected.group_name || "默认"}</span>
                 {selected.account_username && (
                   <span className="text-xs text-gray-500">{selected.account_username}</span>
                 )}
@@ -240,7 +240,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               <button
                 onClick={onLogout}
                 className="text-gray-500 hover:text-gray-300 p-1"
-                title="Log out"
+                title="退出登录"
               >
                 <Lock className="h-3.5 w-3.5" />
               </button>

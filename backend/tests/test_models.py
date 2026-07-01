@@ -23,6 +23,9 @@ def test_profile_create_minimal():
     p = ProfileCreate(name="Test")
     assert p.name == "Test"
     assert p.fingerprint_seed is None
+    assert p.group_name == "默认"
+    assert p.timezone == "Asia/Shanghai"
+    assert p.locale == "zh-CN"
     assert p.platform == "windows"
     assert p.screen_width == 1920
     assert p.screen_height == 1080

@@ -123,6 +123,23 @@ class ApiError extends Error {
   }
 }
 
+const ERROR_MESSAGES: Record<string, string> = {
+  Unauthorized: "需要重新登录",
+  "Invalid token": "口令不正确",
+  "Profile not found": "账号不存在",
+  "Profile is already running": "账号已经在运行",
+  "Profile is not running": "账号未运行",
+  "Profile not running": "账号未运行",
+  "Already running": "账号已经在运行",
+  "Already stopped": "账号已经停止",
+  "Failed to launch browser": "启动浏览器失败",
+  "Internal Server Error": "服务出错",
+};
+
+function friendlyErrorMessage(message: string): string {
+  return ERROR_MESSAGES[message] ?? message;
+}
+
 // Global 401 callback — set by App to trigger login page on auth failure
 let _onUnauthorized: (() => void) | null = null;
 export function setOnUnauthorized(cb: (() => void) | null) {
@@ -140,10 +157,10 @@ async function request<T>(
   if (!res.ok) {
     if (res.status === 401 && _onUnauthorized) {
       _onUnauthorized();
-      throw new ApiError(401, "Unauthorized");
+      throw new ApiError(401, friendlyErrorMessage("Unauthorized"));
     }
     const body = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new ApiError(res.status, body.detail || res.statusText);
+    throw new ApiError(res.status, friendlyErrorMessage(body.detail || res.statusText));
   }
   return res.json();
 }

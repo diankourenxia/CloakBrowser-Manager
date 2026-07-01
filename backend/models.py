@@ -19,14 +19,14 @@ class TagResponse(BaseModel):
 
 class ProfileCreate(BaseModel):
     name: str
-    group_name: str = "Default"
+    group_name: str = "默认"
     account_platform: str | None = None
     account_username: str | None = None
     home_url: str | None = None
     fingerprint_seed: int | None = None  # random if not set
     proxy: str | None = None  # "http://user:pass@host:port" or null
-    timezone: str | None = None  # "America/New_York"
-    locale: str | None = None  # "en-US"
+    timezone: str | None = "Asia/Shanghai"
+    locale: str | None = "zh-CN"
     platform: Literal["windows", "macos", "linux"] = "windows"
     user_agent: str | None = None
     screen_width: int = 1920
@@ -98,14 +98,14 @@ class ProfileImportRequest(BaseModel):
 class ProfileResponse(BaseModel):
     id: str
     name: str
-    group_name: str = "Default"
+    group_name: str = "默认"
     account_platform: str | None = None
     account_username: str | None = None
     home_url: str | None = None
     fingerprint_seed: int
     proxy: str | None = None
-    timezone: str | None = None
-    locale: str | None = None
+    timezone: str | None = "Asia/Shanghai"
+    locale: str | None = "zh-CN"
     platform: str = "windows"
     user_agent: str | None = None
     screen_width: int = 1920

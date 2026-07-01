@@ -126,7 +126,7 @@ describe("error handling", () => {
       statusText: "Not Found",
       json: () => Promise.resolve({ detail: "Profile not found" }),
     });
-    await expect(api.getProfile("bad")).rejects.toThrow("Profile not found");
+    await expect(api.getProfile("bad")).rejects.toThrow("账号不存在");
   });
 
   it("falls back to statusText when response is not JSON", async () => {
@@ -136,6 +136,6 @@ describe("error handling", () => {
       statusText: "Internal Server Error",
       json: () => Promise.reject(new Error("not json")),
     });
-    await expect(api.getStatus()).rejects.toThrow("Internal Server Error");
+    await expect(api.getStatus()).rejects.toThrow("服务出错");
   });
 });

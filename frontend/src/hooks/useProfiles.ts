@@ -12,7 +12,7 @@ export function useProfiles() {
       setProfiles(data);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch profiles");
+      setError(err instanceof Error ? err.message : "加载账号失败");
     } finally {
       setLoading(false);
     }
@@ -20,7 +20,7 @@ export function useProfiles() {
 
   useEffect(() => {
     refresh();
-    // Poll for status changes every 3 seconds
+    // Poll for status changes every 3 seconds.
     const interval = setInterval(refresh, 3000);
     return () => clearInterval(interval);
   }, [refresh]);
@@ -32,7 +32,7 @@ export function useProfiles() {
         setProfiles((prev) => [profile, ...prev]);
         return profile;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to create profile");
+        setError(err instanceof Error ? err.message : "创建账号失败");
       }
     },
     [],
@@ -45,7 +45,7 @@ export function useProfiles() {
         setProfiles((prev) => prev.map((p) => (p.id === id ? profile : p)));
         return profile;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to update profile");
+        setError(err instanceof Error ? err.message : "保存账号失败");
       }
     },
     [],
@@ -57,7 +57,7 @@ export function useProfiles() {
         await api.deleteProfile(id);
         setProfiles((prev) => prev.filter((p) => p.id !== id));
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to delete profile");
+        setError(err instanceof Error ? err.message : "删除账号失败");
       }
     },
     [],
@@ -70,7 +70,7 @@ export function useProfiles() {
         setProfiles((prev) => [profile, ...prev]);
         return profile;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to clone profile");
+        setError(err instanceof Error ? err.message : "复制账号失败");
       }
     },
     [],
@@ -83,7 +83,7 @@ export function useProfiles() {
         await refresh();
         return result;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to launch profile");
+        setError(err instanceof Error ? err.message : "启动账号失败");
       }
     },
     [refresh],
@@ -95,7 +95,7 @@ export function useProfiles() {
         await api.stopProfile(id);
         await refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to stop profile");
+        setError(err instanceof Error ? err.message : "停止账号失败");
       }
     },
     [refresh],
@@ -108,11 +108,11 @@ export function useProfiles() {
         await refresh();
         const failed = results.filter((r) => !r.ok);
         if (failed.length > 0) {
-          setError(`${failed.length} profile${failed.length === 1 ? "" : "s"} failed to launch`);
+          setError(`${failed.length} 个账号启动失败`);
         }
         return results;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to launch selected profiles");
+        setError(err instanceof Error ? err.message : "批量启动失败");
       }
     },
     [refresh],
@@ -125,7 +125,7 @@ export function useProfiles() {
         await refresh();
         return results;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to stop selected profiles");
+        setError(err instanceof Error ? err.message : "批量停止失败");
       }
     },
     [refresh],

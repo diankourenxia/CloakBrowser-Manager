@@ -105,7 +105,9 @@ def test_create_profile_with_tags(tmp_db: Path):
 
 def test_create_profile_defaults(tmp_db: Path):
     p = db.create_profile("Defaults")
-    assert p["group_name"] == "Default"
+    assert p["group_name"] == "默认"
+    assert p["timezone"] == "Asia/Shanghai"
+    assert p["locale"] == "zh-CN"
     assert p["platform"] == "windows"
     assert p["screen_width"] == 1920
     assert p["screen_height"] == 1080

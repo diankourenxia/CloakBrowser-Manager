@@ -1,4 +1,4 @@
-import { Save, Trash2, X } from "lucide-react";
+import { Save, Shuffle, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Profile, ProfileCreateData } from "../lib/api";
 
@@ -54,10 +54,12 @@ const GPU_PRESETS: Record<string, { vendor: string; renderer: string }> = {
 
 const DEFAULT_PROFILE_FORM: ProfileCreateData = {
   name: "",
-  group_name: "Default",
+  group_name: "默认",
   platform: "windows",
   screen_width: 1920,
   screen_height: 1080,
+  timezone: "Asia/Shanghai",
+  locale: "zh-CN",
   humanize: false,
   human_preset: "default",
   headless: false,
@@ -131,7 +133,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
 
   const handleDelete = async () => {
     if (!onDelete) return;
-    if (!confirm("Delete this profile? Browser data will be permanently removed.")) return;
+    if (!confirm("确定删除这个账号吗？浏览器数据会一并删除。")) return;
     setDeleting(true);
     try {
       await onDelete();
@@ -185,7 +187,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold">
-            {isEdit ? "Edit Profile" : "New Profile"}
+            {isEdit ? "编辑账号" : "新建账号"}
           </h2>
           {isEdit && onDelete && (
             <button
@@ -195,17 +197,17 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               className="btn-danger flex items-center gap-1.5"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              <span>{deleting ? "Deleting..." : "Delete"}</span>
+              <span>{deleting ? "删除中..." : "删除"}</span>
             </button>
           )}
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={onCancel} className="btn-secondary">
-            Cancel
+            返回
           </button>
           <button type="submit" disabled={saving} className="btn-primary flex items-center gap-1.5">
             <Save className="h-3.5 w-3.5" />
-            <span>{saving ? "Saving..." : isEdit ? "Save" : "Create"}</span>
+            <span>{saving ? "保存中..." : isEdit ? "保存" : "创建"}</span>
           </button>
         </div>
       </div>
@@ -213,38 +215,38 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
       <div className="space-y-5">
         {/* Basic */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Basic</h3>
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">账号</h3>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="label">Profile Name</label>
+              <label className="label">账号名称</label>
               <input
                 className="input"
                 value={form.name}
                 onChange={(e) => set("name", e.target.value)}
-                placeholder="e.g. Amazon Seller #1"
+                placeholder="例如：TikTok 店铺 1"
                 required
               />
             </div>
             <div>
-              <label className="label">Group</label>
+              <label className="label">分组</label>
               <input
                 className="input"
-                value={form.group_name ?? "Default"}
-                onChange={(e) => set("group_name", e.target.value || "Default")}
-                placeholder="Default"
+                value={form.group_name ?? "默认"}
+                onChange={(e) => set("group_name", e.target.value || "默认")}
+                placeholder="默认"
               />
             </div>
             <div>
-              <label className="label">Account Platform</label>
+              <label className="label">平台</label>
               <input
                 className="input"
                 value={form.account_platform ?? ""}
                 onChange={(e) => set("account_platform", e.target.value || null)}
-                placeholder="Amazon, TikTok, Meta..."
+                placeholder="Amazon、TikTok、Meta..."
               />
             </div>
             <div>
-              <label className="label">Account Username</label>
+              <label className="label">登录账号</label>
               <input
                 className="input"
                 value={form.account_username ?? ""}
@@ -253,7 +255,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               />
             </div>
             <div>
-              <label className="label">Home URL</label>
+              <label className="label">首页地址</label>
               <input
                 className="input"
                 value={form.home_url ?? ""}
@@ -262,7 +264,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               />
             </div>
             <div>
-              <label className="label">Platform</label>
+              <label className="label">系统</label>
               <select
                 className="input"
                 value={form.platform}
@@ -273,58 +275,15 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                 <option value="linux">Linux</option>
               </select>
             </div>
-            <div>
-              <label className="label">Fingerprint Seed</label>
-              <div className="flex gap-2">
-                <input
-                  className="input flex-1 no-spin"
-                  type="number"
-                  value={form.fingerprint_seed ?? ""}
-                  onChange={(e) => set("fingerprint_seed", e.target.value ? Number(e.target.value) : null)}
-                  placeholder="Auto (random)"
-                />
-                <button
-                  type="button"
-                  onClick={randomizeSeed}
-                  className="btn-secondary px-2.5"
-                  title="Randomize seed"
-                >
-                  <svg className="h-5 w-5" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round">
-                    {/* Right face - lightest */}
-                    <polygon points="28,10 16,16 16,28 28,22" fill="currentColor" opacity="0.06" />
-                    <polygon points="28,10 16,16 16,28 28,22" />
-                    {/* Left face - medium shade */}
-                    <polygon points="4,10 16,16 16,28 4,22" fill="currentColor" opacity="0.2" />
-                    <polygon points="4,10 16,16 16,28 4,22" />
-                    {/* Top face - brightest */}
-                    <polygon points="16,3 28,10 16,16 4,10" fill="currentColor" opacity="0.1" />
-                    <polygon points="16,3 28,10 16,16 4,10" />
-                    {/* Dots on top face (3 - diagonal) */}
-                    <circle cx="11.5" cy="8.5" r="1" fill="currentColor" opacity="0.7" />
-                    <circle cx="16" cy="9.5" r="1" fill="currentColor" opacity="0.7" />
-                    <circle cx="20.5" cy="10.5" r="1" fill="currentColor" opacity="0.7" />
-                    {/* Dots on left face (5 - dice pattern) */}
-                    <circle cx="7.5" cy="14" r="0.9" fill="currentColor" opacity="0.6" />
-                    <circle cx="12.5" cy="16.5" r="0.9" fill="currentColor" opacity="0.6" />
-                    <circle cx="10" cy="19" r="0.9" fill="currentColor" opacity="0.6" />
-                    <circle cx="7.5" cy="22" r="0.9" fill="currentColor" opacity="0.6" />
-                    <circle cx="12.5" cy="24.5" r="0.9" fill="currentColor" opacity="0.6" />
-                    {/* Dots on right face (2 - diagonal) */}
-                    <circle cx="20" cy="15" r="0.9" fill="currentColor" opacity="0.5" />
-                    <circle cx="24" cy="20" r="0.9" fill="currentColor" opacity="0.5" />
-                  </svg>
-                </button>
-              </div>
-            </div>
           </div>
         </section>
 
         {/* Network */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Network</h3>
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">网络</h3>
           <div className="space-y-3">
             <div>
-              <label className="label">Proxy</label>
+              <label className="label">代理</label>
               <input
                 className="input"
                 value={form.proxy ?? ""}
@@ -334,21 +293,21 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Timezone</label>
+                <label className="label">时区</label>
                 <input
                   className="input"
                   value={form.timezone ?? ""}
                   onChange={(e) => set("timezone", e.target.value || null)}
-                  placeholder="America/New_York"
+                  placeholder="Asia/Shanghai"
                 />
               </div>
               <div>
-                <label className="label">Locale</label>
+                <label className="label">语言</label>
                 <input
                   className="input"
                   value={form.locale ?? ""}
                   onChange={(e) => set("locale", e.target.value || null)}
-                  placeholder="en-US"
+                  placeholder="zh-CN"
                 />
               </div>
             </div>
@@ -359,17 +318,39 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                 onChange={(e) => set("geoip", e.target.checked)}
                 className="rounded border-border bg-surface-2"
               />
-              Auto-detect timezone/locale from proxy IP (GeoIP)
+              根据代理 IP 自动匹配时区和语言
             </label>
           </div>
         </section>
 
         {/* Hardware */}
-        <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Hardware</h3>
-          <div className="space-y-3">
+        <details className="rounded-md border border-border bg-surface-1/40 p-3">
+          <summary className="cursor-pointer text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            高级设备设置
+          </summary>
+          <div className="space-y-3 mt-3">
             <div>
-              <label className="label">Screen Resolution</label>
+              <label className="label">指纹种子</label>
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1 no-spin"
+                  type="number"
+                  value={form.fingerprint_seed ?? ""}
+                  onChange={(e) => set("fingerprint_seed", e.target.value ? Number(e.target.value) : null)}
+                  placeholder="自动生成"
+                />
+                <button
+                  type="button"
+                  onClick={randomizeSeed}
+                  className="btn-secondary px-2.5"
+                  title="随机生成"
+                >
+                  <Shuffle className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="label">屏幕尺寸</label>
               <select
                 className="input"
                 value={currentResolution}
@@ -384,13 +365,13 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                 {Object.keys(RESOLUTION_PRESETS).map((name) => (
                   <option key={name} value={name}>{name}</option>
                 ))}
-                <option value="custom">Custom</option>
+                <option value="custom">自定义</option>
               </select>
             </div>
             {currentResolution === "custom" && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Width</label>
+                  <label className="label">宽度</label>
                   <input
                     className="input"
                     type="number"
@@ -399,7 +380,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                   />
                 </div>
                 <div>
-                  <label className="label">Height</label>
+                  <label className="label">高度</label>
                   <input
                     className="input"
                     type="number"
@@ -410,17 +391,17 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               </div>
             )}
             <div>
-              <label className="label">Hardware Concurrency</label>
+              <label className="label">CPU 线程数</label>
               <input
                 className="input"
                 type="number"
                 value={form.hardware_concurrency ?? ""}
                 onChange={(e) => set("hardware_concurrency", e.target.value ? Number(e.target.value) : null)}
-                placeholder="Auto (from seed)"
+                placeholder="自动生成"
               />
             </div>
             <div>
-              <label className="label">GPU Preset</label>
+              <label className="label">GPU 预设</label>
               <select
                 className="input"
                 value=""
@@ -428,37 +409,39 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                   if (e.target.value) applyGpuPreset(e.target.value);
                 }}
               >
-                <option value="">Select preset...</option>
+                <option value="">选择预设...</option>
                 {Object.keys(GPU_PRESETS).map((name) => (
                   <option key={name} value={name}>{name}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="label">GPU Vendor</label>
+              <label className="label">GPU 厂商</label>
               <input
                 className="input"
                 value={form.gpu_vendor ?? ""}
                 onChange={(e) => set("gpu_vendor", e.target.value || null)}
-                placeholder="Auto (from seed)"
+                placeholder="自动生成"
               />
             </div>
             <div>
-              <label className="label">GPU Renderer</label>
+              <label className="label">GPU 型号</label>
               <input
                 className="input"
                 value={form.gpu_renderer ?? ""}
                 onChange={(e) => set("gpu_renderer", e.target.value || null)}
-                placeholder="Auto (from seed)"
+                placeholder="自动生成"
               />
             </div>
           </div>
-        </section>
+        </details>
 
         {/* Behavior */}
-        <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Behavior</h3>
-          <div className="space-y-3">
+        <details className="rounded-md border border-border bg-surface-1/40 p-3">
+          <summary className="cursor-pointer text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            高级偏好
+          </summary>
+          <div className="space-y-3 mt-3">
             <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
               <input
                 type="checkbox"
@@ -466,18 +449,18 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                 onChange={(e) => set("humanize", e.target.checked)}
                 className="rounded border-border bg-surface-2"
               />
-              Human-like mouse, keyboard, and scroll behavior
+              模拟真人鼠标、键盘和滚动
             </label>
             {form.humanize && (
               <div>
-                <label className="label">Human Preset</label>
+                <label className="label">操作风格</label>
                 <select
                   className="input"
                   value={form.human_preset}
                   onChange={(e) => set("human_preset", e.target.value)}
                 >
-                  <option value="default">Default (normal speed)</option>
-                  <option value="careful">Careful (slower, deliberate)</option>
+                  <option value="default">默认</option>
+                  <option value="careful">谨慎慢速</option>
                 </select>
               </div>
             )}
@@ -488,7 +471,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                 onChange={(e) => set("clipboard_sync", e.target.checked)}
                 className="rounded border-border bg-surface-2"
               />
-              Enable clipboard sync by default in VNC viewer
+              默认开启剪贴板同步
             </label>
             <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
               <input
@@ -497,36 +480,36 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                 onChange={(e) => set("auto_launch", e.target.checked)}
                 className="rounded border-border bg-surface-2"
               />
-              Launch automatically when container starts
+              客户端启动时自动打开
             </label>
             <div>
-              <label className="label">Color Scheme</label>
+              <label className="label">外观</label>
               <select
                 className="input"
                 value={form.color_scheme ?? ""}
                 onChange={(e) => set("color_scheme", e.target.value || null)}
               >
-                <option value="">System default</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-                <option value="no-preference">No preference</option>
+                <option value="">跟随系统</option>
+                <option value="light">浅色</option>
+                <option value="dark">深色</option>
+                <option value="no-preference">无偏好</option>
               </select>
             </div>
             <div>
-              <label className="label">User Agent</label>
+              <label className="label">浏览器标识</label>
               <input
                 className="input"
                 value={form.user_agent ?? ""}
                 onChange={(e) => set("user_agent", e.target.value || null)}
-                placeholder="Auto (from binary)"
+                placeholder="自动生成"
               />
             </div>
           </div>
-        </section>
+        </details>
 
         {/* Tags */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Tags</h3>
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">标签</h3>
           {(form.tags ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {(form.tags ?? []).map((t) => (
@@ -568,18 +551,20 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
-              placeholder="Add tag..."
+              placeholder="添加标签..."
             />
             <button type="button" onClick={addTag} className="btn-secondary text-xs">
-              Add
+              添加
             </button>
           </div>
         </section>
 
         {/* Launch Args */}
-        <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Launch Args</h3>
-          <p className="text-xs text-gray-500 mb-2">Custom Chromium flags passed at launch (e.g. --load-extension, --disable-features)</p>
+        <details className="rounded-md border border-border bg-surface-1/40 p-3">
+          <summary className="cursor-pointer text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            启动参数
+          </summary>
+          <p className="text-xs text-gray-500 my-3">高级 Chromium 启动参数，一般不用填写。</p>
           {(form.launch_args ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {(form.launch_args ?? []).map((arg, idx) => (
@@ -608,19 +593,19 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               placeholder="--load-extension=/data/extensions/ublock"
             />
             <button type="button" onClick={addLaunchArg} className="btn-secondary text-xs">
-              Add
+              添加
             </button>
           </div>
-        </section>
+        </details>
 
         {/* Notes */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Notes</h3>
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">备注</h3>
           <textarea
             className="input min-h-[80px] resize-y"
             value={form.notes ?? ""}
             onChange={(e) => set("notes", e.target.value || null)}
-            placeholder="Optional notes about this profile..."
+            placeholder="记录账号用途、负责人、注意事项..."
           />
         </section>
       </div>
