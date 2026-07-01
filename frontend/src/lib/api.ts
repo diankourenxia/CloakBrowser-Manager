@@ -2,6 +2,31 @@
  * API client for CloakBrowser Manager backend.
  */
 
+declare global {
+  interface Window {
+    cloakClient?: {
+      apiBase?: string;
+      platform?: string;
+      mode?: "desktop" | "web";
+    };
+  }
+}
+
+const API_BASE = window.cloakClient?.apiBase?.replace(/\/$/, "") ?? "";
+
+export function resolveApiUrl(path: string): string {
+  if (!API_BASE) return path;
+  return `${API_BASE}${path}`;
+}
+
+export function resolveWebSocketUrl(path: string): string {
+  const fallbackBase = `${window.location.protocol}//${window.location.host}`;
+  const base = API_BASE || fallbackBase;
+  const url = new URL(path, base);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return url.toString();
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -108,7 +133,7 @@ async function request<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(resolveApiUrl(path), {
     headers: { "Content-Type": "application/json" },
     ...options,
   });

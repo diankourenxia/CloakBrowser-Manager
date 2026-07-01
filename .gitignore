@@ -4,10 +4,12 @@ __pycache__/
 *.egg-info/
 .venv/
 .local-data/
+.desktop-data/
 
 # Node
 node_modules/
 frontend/dist/
+frontend/release/
 
 # IDE
 .vscode/

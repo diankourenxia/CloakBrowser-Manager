@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ClipboardCopy, Code2, Maximize2, Minimize2 } from "lucide-react";
-import { api } from "../lib/api";
+import { api, resolveApiUrl, resolveWebSocketUrl } from "../lib/api";
 
 interface ProfileViewerProps {
   profileId: string;
@@ -32,8 +32,7 @@ export function ProfileViewer({ profileId, cdpUrl, clipboardSync: initialClipboa
 
         if (cancelled) return;
 
-        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = `${protocol}//${window.location.host}/api/profiles/${profileId}/vnc`;
+        const wsUrl = resolveWebSocketUrl(`/api/profiles/${profileId}/vnc`);
 
         rfb = new RFB(containerRef.current!, wsUrl, {
           wsProtocols: ["binary"],
@@ -253,7 +252,7 @@ export function ProfileViewer({ profileId, cdpUrl, clipboardSync: initialClipboa
           {cdpUrl && (
             <button
               onClick={() => {
-                const base = `${window.location.protocol}//${window.location.host}${cdpUrl}`;
+                const base = resolveApiUrl(cdpUrl);
                 navigator.clipboard?.writeText(base).then(() => {
                   setCdpCopied(true);
                   setTimeout(() => setCdpCopied(false), 2000);

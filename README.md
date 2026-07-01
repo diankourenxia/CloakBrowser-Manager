@@ -79,6 +79,31 @@ Each CloakBrowser profile generates a completely different device identity. To t
 
 ## Development
 
+### Desktop Client
+
+The Electron client starts the local FastAPI backend automatically, stores data
+under the app user-data directory, and opens the account workspace in a desktop
+window.
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r backend/requirements.txt
+cd frontend
+npm install
+npm run desktop
+```
+
+For local packaging:
+
+```bash
+cd frontend
+npm run desktop:pack
+```
+
+> The current desktop build expects Python and the backend dependencies to be
+> available locally. Set `PYTHON_BIN=/path/to/python` if you want the client to
+> use a specific interpreter.
+
 ### Backend
 
 ```bash
