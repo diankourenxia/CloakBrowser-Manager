@@ -590,7 +590,7 @@ async def launch_profile(profile_id: str):
         raise HTTPException(status_code=409, detail="Profile is already running")
 
     try:
-        running = await browser_mgr.launch(profile)
+        await browser_mgr.launch(profile)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -599,13 +599,7 @@ async def launch_profile(profile_id: str):
 
     db.mark_profile_launched(profile_id)
 
-    return LaunchResponse(
-        profile_id=profile_id,
-        status="running",
-        vnc_ws_port=running.ws_port,
-        display=f":{running.display}",
-        cdp_url=f"/api/profiles/{profile_id}/cdp",
-    )
+    return LaunchResponse(profile_id=profile_id, **browser_mgr.get_status(profile_id))
 
 
 @app.post("/api/profiles/{profile_id}/stop")
@@ -654,6 +648,8 @@ async def set_clipboard(profile_id: str, body: ClipboardRequest):
     running = browser_mgr.running.get(profile_id)
     if not running:
         raise HTTPException(status_code=404, detail="Profile not running")
+    if running.display is None:
+        raise HTTPException(status_code=400, detail="Native browser clipboard sync is not available")
 
     import os
 
@@ -708,6 +704,9 @@ async def get_clipboard(profile_id: str):
     except Exception as exc:
         logger.debug("Playwright clipboard read failed: %s", exc)
 
+    if running.display is None:
+        return {"text": ""}
+
     # Fallback: xclip for non-Chrome clipboard owners
     import os
 
@@ -744,6 +743,9 @@ async def vnc_proxy(websocket: WebSocket, profile_id: str):
     running = browser_mgr.running.get(profile_id)
     if not running:
         await websocket.close(code=4004, reason="Profile not running")
+        return
+    if running.ws_port is None:
+        await websocket.close(code=4004, reason="Profile has no VNC viewer")
         return
 
     # Accept with client's requested subprotocol (if any) — RFC 6455 requires

@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import socket
 import time
 from dataclasses import dataclass
@@ -159,9 +160,10 @@ CDP_PORT_RANGE = 100  # cycle through 5100-5199 to avoid TIME_WAIT collisions
 class RunningProfile:
     profile_id: str
     context: Any  # Playwright BrowserContext
-    display: int
-    ws_port: int
+    display: int | None
+    ws_port: int | None
     cdp_port: int
+    mode: str = "vnc"
 
 
 class BrowserManager:
@@ -182,14 +184,19 @@ class BrowserManager:
                 raise RuntimeError(f"Profile {profile_id} is already running")
             self._launching.add(profile_id)
 
-        display, ws_port = await self.vnc.allocate()
+        use_vnc = self._should_use_vnc()
+        display: int | None = None
+        ws_port: int | None = None
+        if use_vnc:
+            display, ws_port = await self.vnc.allocate()
 
         try:
             cdp_port = self._allocate_cdp_port()
         except ValueError:
             async with self._lock:
                 self._launching.discard(profile_id)
-            await self.vnc.stop_vnc(display)
+            if display is not None:
+                await self.vnc.stop_vnc(display)
             raise
 
         # Clean stale Chromium lock files (left by previous container crashes)
@@ -202,13 +209,14 @@ class BrowserManager:
         _init_profile_defaults(user_data_dir)
 
         try:
-            # Start KasmVNC on the allocated display
-            await self.vnc.start_vnc(
-                display,
-                ws_port,
-                width=profile.get("screen_width", 1920),
-                height=profile.get("screen_height", 1080),
-            )
+            if use_vnc:
+                # Start KasmVNC on the allocated display
+                await self.vnc.start_vnc(
+                    display,  # type: ignore[arg-type]
+                    ws_port,  # type: ignore[arg-type]
+                    width=profile.get("screen_width", 1920),
+                    height=profile.get("screen_height", 1080),
+                )
 
             # Build fingerprint args from profile settings
             extra_args = self._build_fingerprint_args(profile)
@@ -221,26 +229,28 @@ class BrowserManager:
             if proxy:
                 _validate_proxy(proxy)
 
-            # Launch CloakBrowser on that display
-            # DISPLAY is passed via env kwarg to avoid process-wide os.environ mutation
-            context = await launch_persistent_context_async(
-                user_data_dir=profile["user_data_dir"],
-                headless=bool(profile.get("headless", False)),
-                proxy=proxy,
-                args=extra_args,
-                timezone=profile.get("timezone") or None,
-                locale=profile.get("locale") or None,
-                humanize=bool(profile.get("humanize", False)),
-                human_preset=profile.get("human_preset", "default"),
-                geoip=bool(profile.get("geoip", False)),
-                color_scheme=profile.get("color_scheme") or None,
-                user_agent=profile.get("user_agent") or None,
-                viewport={
+            launch_kwargs = {
+                "user_data_dir": profile["user_data_dir"],
+                "headless": bool(profile.get("headless", False)),
+                "proxy": proxy,
+                "args": extra_args,
+                "timezone": profile.get("timezone") or None,
+                "locale": profile.get("locale") or None,
+                "humanize": bool(profile.get("humanize", False)),
+                "human_preset": profile.get("human_preset", "default"),
+                "geoip": bool(profile.get("geoip", False)),
+                "color_scheme": profile.get("color_scheme") or None,
+                "user_agent": profile.get("user_agent") or None,
+                "viewport": {
                     "width": profile.get("screen_width", 1920),
                     "height": profile.get("screen_height", 1080) - 133,
                 },
-                env={**os.environ, "DISPLAY": f":{display}"},
-            )
+            }
+            if use_vnc:
+                # DISPLAY is passed via env kwarg to avoid process-wide os.environ mutation.
+                launch_kwargs["env"] = {**os.environ, "DISPLAY": f":{display}"}
+
+            context = await launch_persistent_context_async(**launch_kwargs)
 
             # Inject clipboard listener: captures copied text on every page
             # so the GET /clipboard endpoint can read it via page.evaluate()
@@ -283,6 +293,7 @@ class BrowserManager:
                 display=display,
                 ws_port=ws_port,
                 cdp_port=cdp_port,
+                mode="vnc" if use_vnc else "native",
             )
 
             # Auto-cleanup if browser crashes or user closes Chrome via VNC
@@ -295,8 +306,8 @@ class BrowserManager:
                 self._launching.discard(profile_id)
 
             logger.info(
-                "Launched profile %s on display :%d (ws_port=%d, cdp_port=%d)",
-                profile_id, display, ws_port, cdp_port,
+                "Launched profile %s in %s mode (display=%s, ws_port=%s, cdp_port=%d)",
+                profile_id, running.mode, display, ws_port, cdp_port,
             )
 
             return running
@@ -304,7 +315,8 @@ class BrowserManager:
         except BaseException:
             async with self._lock:
                 self._launching.discard(profile_id)
-            await self.vnc.stop_vnc(display)
+            if display is not None:
+                await self.vnc.stop_vnc(display)
             raise
 
     async def _on_browser_closed(self, profile_id: str):
@@ -314,7 +326,8 @@ class BrowserManager:
 
         if running:
             logger.info("Browser closed for profile %s, cleaning up", profile_id)
-            await self.vnc.stop_vnc(running.display)
+            if running.display is not None:
+                await self.vnc.stop_vnc(running.display)
 
     async def stop(self, profile_id: str):
         """Stop a running browser instance."""
@@ -332,7 +345,8 @@ class BrowserManager:
         except Exception as exc:
             logger.warning("Error closing context for %s: %s", profile_id, exc)
 
-        await self.vnc.stop_vnc(running.display)
+        if running.display is not None:
+            await self.vnc.stop_vnc(running.display)
 
     def get_status(self, profile_id: str) -> dict[str, Any]:
         """Get running status for a profile."""
@@ -341,7 +355,7 @@ class BrowserManager:
             return {
                 "status": "running",
                 "vnc_ws_port": running.ws_port,
-                "display": f":{running.display}",
+                "display": f":{running.display}" if running.display is not None else "native",
                 "cdp_url": f"/api/profiles/{profile_id}/cdp",
             }
         return {"status": "stopped", "vnc_ws_port": None, "display": None, "cdp_url": None}
@@ -396,6 +410,17 @@ class BrowserManager:
                 except OSError:
                     continue
         raise ValueError("No free CDP ports available in range %d-%d" % (BASE_CDP_PORT, BASE_CDP_PORT + CDP_PORT_RANGE - 1))
+
+    def _should_use_vnc(self) -> bool:
+        """Decide whether to run browsers inside a VNC display or as native windows."""
+        mode = os.environ.get("BROWSER_DISPLAY_MODE", "auto").lower()
+        if mode == "native":
+            return False
+        if mode == "vnc":
+            if not shutil.which("Xvnc"):
+                raise RuntimeError("Xvnc is required for BROWSER_DISPLAY_MODE=vnc")
+            return True
+        return shutil.which("Xvnc") is not None
 
     def _build_fingerprint_args(self, profile: dict[str, Any]) -> list[str]:
         """Build extra Chromium args from profile fingerprint settings."""

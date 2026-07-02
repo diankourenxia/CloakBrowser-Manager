@@ -96,8 +96,8 @@ export interface ProfileCreateData {
 export interface LaunchResult {
   profile_id: string;
   status: string;
-  vnc_ws_port: number;
-  display: string;
+  vnc_ws_port: number | null;
+  display: string | null;
   cdp_url: string | null;
 }
 
@@ -133,6 +133,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   "Already running": "账号已经在运行",
   "Already stopped": "账号已经停止",
   "Failed to launch browser": "启动浏览器失败",
+  "Native browser clipboard sync is not available": "本机窗口模式不支持远程剪贴板同步",
   "Internal Server Error": "服务出错",
 };
 
