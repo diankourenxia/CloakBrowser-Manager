@@ -7,6 +7,7 @@ for browser profile management with live VNC viewing.
 from __future__ import annotations
 
 import asyncio
+import base64
 import hmac
 import logging
 import os
@@ -133,6 +134,13 @@ async def _check_websocket_origin(websocket: WebSocket) -> bool:
         host_normalized = host.rsplit(":", 1)[0]
 
     if origin_netloc == host_normalized:
+        return True
+
+    def _loopback_host(value: str) -> bool:
+        host_part = value.strip("[]").split(":", 1)[0]
+        return host_part in {"localhost", "127.0.0.1", "::1"}
+
+    if _loopback_host(origin_host) and _loopback_host(host_normalized):
         return True
 
     logger.warning("WebSocket origin mismatch: origin=%s host=%s", origin, host)
@@ -732,6 +740,128 @@ async def get_clipboard(profile_id: str):
 
 
 # ── VNC WebSocket Proxy ──────────────────────────────────────────────────────
+
+
+async def _get_screencast_page(running) -> object:
+    """Return the most useful page for embedded preview/control."""
+    pages = [
+        page for page in running.context.pages
+        if not getattr(page, "is_closed", lambda: False)()
+    ]
+    if pages:
+        return pages[-1]
+    return await running.context.new_page()
+
+
+async def _handle_screencast_input(running, payload: dict) -> None:
+    page = await _get_screencast_page(running)
+    message_type = payload.get("type")
+
+    if message_type == "mouse":
+        x = int(payload.get("x", 0))
+        y = int(payload.get("y", 0))
+        action = payload.get("action")
+        button = payload.get("button", "left")
+        if action == "move":
+            await page.mouse.move(x, y)
+        elif action == "down":
+            await page.mouse.move(x, y)
+            await page.mouse.down(button=button)
+        elif action == "up":
+            await page.mouse.move(x, y)
+            await page.mouse.up(button=button)
+        elif action == "click":
+            await page.mouse.click(x, y, button=button)
+        return
+
+    if message_type == "wheel":
+        await page.mouse.wheel(
+            float(payload.get("delta_x", 0)),
+            float(payload.get("delta_y", 0)),
+        )
+        return
+
+    if message_type == "text":
+        text = str(payload.get("text", ""))
+        if text:
+            await page.keyboard.insert_text(text)
+        return
+
+    if message_type == "press":
+        key = str(payload.get("key", ""))
+        if key:
+            await page.keyboard.press(key)
+        return
+
+
+@app.websocket("/api/profiles/{profile_id}/screencast")
+async def profile_screencast(websocket: WebSocket, profile_id: str):
+    """Live embedded preview/control for profiles when VNC is unavailable."""
+    if not await _check_websocket_origin(websocket):
+        return
+
+    running = browser_mgr.running.get(profile_id)
+    if not running:
+        await websocket.close(code=4004, reason="Profile not running")
+        return
+
+    await websocket.accept()
+
+    async def send_frames():
+        while True:
+            try:
+                page = await _get_screencast_page(running)
+                viewport = page.viewport_size or {"width": 1280, "height": 720}
+                image = await asyncio.wait_for(
+                    page.screenshot(type="jpeg", quality=45, full_page=False),
+                    timeout=6,
+                )
+            except asyncio.TimeoutError:
+                logger.debug("Screencast frame timed out for %s", profile_id)
+                await asyncio.sleep(1.5)
+                continue
+            except Exception as exc:
+                logger.debug("Screencast frame skipped for %s: %s", profile_id, exc)
+                await asyncio.sleep(1.5)
+                continue
+
+            await websocket.send_json({
+                "type": "frame",
+                "image": "data:image/jpeg;base64,"
+                + base64.b64encode(image).decode("ascii"),
+                "width": viewport.get("width", 1280),
+                "height": viewport.get("height", 720),
+            })
+            await asyncio.sleep(1.2)
+
+    async def receive_input():
+        while True:
+            payload = await websocket.receive_json()
+            await _handle_screencast_input(running, payload)
+
+    sender = asyncio.create_task(send_frames(), name="screencast-send")
+    receiver = asyncio.create_task(receive_input(), name="screencast-input")
+    try:
+        done, pending = await asyncio.wait(
+            [sender, receiver],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in pending:
+            task.cancel()
+        for task in done:
+            task.result()
+    except WebSocketDisconnect:
+        logger.info("Screencast client disconnected for %s", profile_id)
+    except Exception as exc:
+        logger.warning("Screencast ended for %s: %s", profile_id, exc)
+    finally:
+        for task in (sender, receiver):
+            if not task.done():
+                task.cancel()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 @app.websocket("/api/profiles/{profile_id}/vnc")

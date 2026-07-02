@@ -1,6 +1,7 @@
 import { Copy, ExternalLink, Play, Plus, Search, Square } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Profile } from "../lib/api";
+import { ProfileEmbeddedViewer } from "./ProfileEmbeddedViewer";
 import { StatusIndicator } from "./StatusIndicator";
 
 interface ProfileWorkspaceProps {
@@ -55,6 +56,7 @@ export function ProfileWorkspace({
   }, [group, profiles, search]);
 
   const visibleIds = filtered.map((p) => p.id);
+  const runningProfiles = filtered.filter((p) => p.status === "running");
   const selectedVisibleCount = visibleIds.filter((id) => checkedIds.has(id)).length;
   const selectedBatchIds = Array.from(checkedIds).filter((id) =>
     profiles.some((p) => p.id === id),
@@ -136,6 +138,54 @@ export function ProfileWorkspace({
       </div>
 
       <div className="flex-1 overflow-auto">
+        {runningProfiles.length > 0 && (
+          <section className="border-b border-border bg-surface-0 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-gray-200">运行窗口</h3>
+              <span className="text-xs text-gray-500">{runningProfiles.length} 个运行中</span>
+            </div>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-3">
+              {runningProfiles.map((profile) => (
+                <div
+                  key={profile.id}
+                  className={`overflow-hidden rounded-md border bg-surface-1 ${
+                    selectedId === profile.id ? "border-accent/70" : "border-border"
+                  }`}
+                >
+                  <div
+                    className="flex items-center justify-between gap-2 px-3 py-2"
+                    onClick={() => onSelect(profile.id)}
+                  >
+                    <button
+                      type="button"
+                      className="flex min-w-0 items-center gap-2 text-left"
+                      onClick={() => onSelect(profile.id)}
+                    >
+                      <StatusIndicator status={profile.status} />
+                      <span className="truncate text-sm font-medium text-gray-100">{profile.name}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onStop(profile.id);
+                      }}
+                      className="p-1 text-gray-500 hover:text-gray-200"
+                      title="停止"
+                    >
+                      <Square className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <ProfileEmbeddedViewer
+                    profileId={profile.id}
+                    className="aspect-video border-t border-border"
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <table className="w-full min-w-[760px] text-sm">
           <thead className="sticky top-0 bg-surface-1 border-b border-border z-10">
             <tr className="text-left text-xs text-gray-500">

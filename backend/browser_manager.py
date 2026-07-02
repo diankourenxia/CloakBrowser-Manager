@@ -184,7 +184,8 @@ class BrowserManager:
                 raise RuntimeError(f"Profile {profile_id} is already running")
             self._launching.add(profile_id)
 
-        use_vnc = self._should_use_vnc()
+        display_mode = self._display_mode()
+        use_vnc = display_mode == "vnc"
         display: int | None = None
         ws_port: int | None = None
         if use_vnc:
@@ -231,7 +232,7 @@ class BrowserManager:
 
             launch_kwargs = {
                 "user_data_dir": profile["user_data_dir"],
-                "headless": bool(profile.get("headless", False)),
+                "headless": True if display_mode == "embedded" else bool(profile.get("headless", False)),
                 "proxy": proxy,
                 "args": extra_args,
                 "timezone": profile.get("timezone") or None,
@@ -293,7 +294,7 @@ class BrowserManager:
                 display=display,
                 ws_port=ws_port,
                 cdp_port=cdp_port,
-                mode="vnc" if use_vnc else "native",
+                mode=display_mode,
             )
 
             # Auto-cleanup if browser crashes or user closes Chrome via VNC
@@ -355,7 +356,7 @@ class BrowserManager:
             return {
                 "status": "running",
                 "vnc_ws_port": running.ws_port,
-                "display": f":{running.display}" if running.display is not None else "native",
+                "display": f":{running.display}" if running.display is not None else running.mode,
                 "cdp_url": f"/api/profiles/{profile_id}/cdp",
             }
         return {"status": "stopped", "vnc_ws_port": None, "display": None, "cdp_url": None}
@@ -411,16 +412,16 @@ class BrowserManager:
                     continue
         raise ValueError("No free CDP ports available in range %d-%d" % (BASE_CDP_PORT, BASE_CDP_PORT + CDP_PORT_RANGE - 1))
 
-    def _should_use_vnc(self) -> bool:
-        """Decide whether to run browsers inside a VNC display or as native windows."""
+    def _display_mode(self) -> str:
+        """Decide whether browsers run in VNC, embedded screencast, or native windows."""
         mode = os.environ.get("BROWSER_DISPLAY_MODE", "auto").lower()
-        if mode == "native":
-            return False
+        if mode in {"embedded", "native"}:
+            return mode
         if mode == "vnc":
             if not shutil.which("Xvnc"):
                 raise RuntimeError("Xvnc is required for BROWSER_DISPLAY_MODE=vnc")
-            return True
-        return shutil.which("Xvnc") is not None
+            return "vnc"
+        return "vnc" if shutil.which("Xvnc") else "embedded"
 
     def _build_fingerprint_args(self, profile: dict[str, Any]) -> list[str]:
         """Build extra Chromium args from profile fingerprint settings."""
