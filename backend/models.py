@@ -135,6 +135,7 @@ class ProfileResponse(BaseModel):
     tags: list[TagResponse] = []
     status: str = "stopped"  # "running" | "stopped"
     vnc_ws_port: int | None = None
+    display: str | None = None
     cdp_url: str | None = None
 
 

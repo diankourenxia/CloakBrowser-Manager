@@ -8,6 +8,7 @@ import logging
 import os
 import shutil
 import socket
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -427,9 +428,14 @@ class BrowserManager:
         """Build extra Chromium args from profile fingerprint settings."""
         args: list[str] = [
             "--disable-infobars",
+            "--no-default-browser-check",
+            "--no-first-run",
+            "--password-store=basic",
             "--test-type",  # suppress "unsupported flag: --no-sandbox" bad flags warning
             "--use-angle=swiftshader",  # software GL for VNC (no GPU in container)
         ]
+        if sys.platform == "darwin":
+            args.append("--use-mock-keychain")
 
         seed = profile.get("fingerprint_seed")
         if seed is not None:

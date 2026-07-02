@@ -127,6 +127,7 @@ async function startBackend() {
 
   const env = {
     ...process.env,
+    BROWSER_DISPLAY_MODE: process.env.BROWSER_DISPLAY_MODE || "embedded",
     DATA_DIR: dataDir,
     PYTHONPATH: root,
   };

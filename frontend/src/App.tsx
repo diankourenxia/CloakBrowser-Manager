@@ -301,13 +301,32 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                 clipboardSync={selected.clipboard_sync}
                 onDisconnect={handleVncDisconnect}
               />
-            ) : (
+            ) : selected.display === "embedded" ? (
               <ProfileEmbeddedViewer
                 key={selected.id}
                 profileId={selected.id}
                 className="h-full w-full"
                 lazy={false}
               />
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center max-w-sm px-6">
+                  <div className="mx-auto mb-4 h-10 w-10 rounded-md bg-emerald-500/10 flex items-center justify-center">
+                    <StatusIndicator status="running" size="md" />
+                  </div>
+                  <h2 className="text-base font-semibold text-gray-100">浏览器已在桌面窗口打开</h2>
+                  <p className="text-sm text-gray-500 mt-2">
+                    这个账号正在 CloakBrowser 原生窗口里运行，直接切到桌面浏览器窗口操作。
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleStopProfile(selected.id)}
+                    className="btn-secondary mt-5"
+                  >
+                    停止账号
+                  </button>
+                </div>
+              </div>
             )
           )}
         </div>

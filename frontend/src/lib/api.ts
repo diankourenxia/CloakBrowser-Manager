@@ -61,6 +61,7 @@ export interface Profile {
   tags: { tag: string; color: string | null }[];
   status: "running" | "stopped";
   vnc_ws_port: number | null;
+  display: string | null;
   cdp_url: string | null;
 }
 

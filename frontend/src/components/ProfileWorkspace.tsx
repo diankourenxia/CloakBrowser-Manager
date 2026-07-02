@@ -1,5 +1,5 @@
 import { Copy, ExternalLink, Play, Plus, Search, Square } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Profile } from "../lib/api";
 import { ProfileEmbeddedViewer } from "./ProfileEmbeddedViewer";
 import { StatusIndicator } from "./StatusIndicator";
@@ -30,6 +30,7 @@ export function ProfileWorkspace({
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("all");
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
   const groups = useMemo(() => {
     const names = new Set(profiles.map((p) => p.group_name || "默认"));
@@ -57,6 +58,9 @@ export function ProfileWorkspace({
 
   const visibleIds = filtered.map((p) => p.id);
   const runningProfiles = filtered.filter((p) => p.status === "running");
+  const previewProfiles = runningProfiles.filter((p) => p.display !== "native");
+  const nativeProfiles = runningProfiles.filter((p) => p.display === "native");
+  const activePreview = previewProfiles.find((p) => p.id === activeRunId) ?? previewProfiles[0] ?? null;
   const selectedVisibleCount = visibleIds.filter((id) => checkedIds.has(id)).length;
   const selectedBatchIds = Array.from(checkedIds).filter((id) =>
     profiles.some((p) => p.id === id),
@@ -82,6 +86,16 @@ export function ProfileWorkspace({
       return next;
     });
   };
+
+  useEffect(() => {
+    if (previewProfiles.length === 0) {
+      if (activeRunId) setActiveRunId(null);
+      return;
+    }
+    if (!activeRunId || !previewProfiles.some((profile) => profile.id === activeRunId)) {
+      setActiveRunId(previewProfiles[0]?.id ?? null);
+    }
+  }, [activeRunId, previewProfiles]);
 
   return (
     <div className="h-full flex flex-col">
@@ -138,51 +152,91 @@ export function ProfileWorkspace({
       </div>
 
       <div className="flex-1 overflow-auto">
-        {runningProfiles.length > 0 && (
+        {nativeProfiles.length > 0 && (
           <section className="border-b border-border bg-surface-0 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold text-gray-200">运行窗口</h3>
-              <span className="text-xs text-gray-500">{runningProfiles.length} 个运行中</span>
+              <h3 className="text-sm font-semibold text-gray-200">已打开浏览器窗口</h3>
+              <span className="text-xs text-gray-500">{nativeProfiles.length} 个运行中</span>
             </div>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-3">
-              {runningProfiles.map((profile) => (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
+              {nativeProfiles.map((profile) => (
                 <div
                   key={profile.id}
-                  className={`overflow-hidden rounded-md border bg-surface-1 ${
+                  onClick={() => onSelect(profile.id)}
+                  className={`flex cursor-pointer items-center justify-between gap-2 rounded-md border bg-surface-1 px-3 py-2 text-left ${
                     selectedId === profile.id ? "border-accent/70" : "border-border"
                   }`}
                 >
-                  <div
-                    className="flex items-center justify-between gap-2 px-3 py-2"
-                    onClick={() => onSelect(profile.id)}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <StatusIndicator status={profile.status} />
+                    <span className="truncate text-sm font-medium text-gray-100">{profile.name}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onStop(profile.id);
+                    }}
+                    className="p-1 text-gray-500 hover:text-gray-200"
+                    title="停止"
                   >
-                    <button
-                      type="button"
-                      className="flex min-w-0 items-center gap-2 text-left"
-                      onClick={() => onSelect(profile.id)}
-                    >
-                      <StatusIndicator status={profile.status} />
-                      <span className="truncate text-sm font-medium text-gray-100">{profile.name}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onStop(profile.id);
-                      }}
-                      className="p-1 text-gray-500 hover:text-gray-200"
-                      title="停止"
-                    >
-                      <Square className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <ProfileEmbeddedViewer
-                    profileId={profile.id}
-                    className="aspect-video border-t border-border"
-                  />
+                    <Square className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               ))}
             </div>
+          </section>
+        )}
+
+        {previewProfiles.length > 0 && (
+          <section className="border-b border-border bg-surface-0 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-gray-200">浏览器标签</h3>
+              <span className="text-xs text-gray-500">{previewProfiles.length} 个运行中</span>
+            </div>
+            <div className="flex gap-1 overflow-x-auto border-b border-border">
+              {previewProfiles.map((profile) => (
+                <div
+                  key={profile.id}
+                  className={`mb-[-1px] flex min-w-[160px] max-w-[220px] items-center gap-1 rounded-t-md border px-2 py-1.5 ${
+                    activePreview?.id === profile.id
+                      ? "border-border border-b-surface-1 bg-surface-1"
+                      : "border-transparent bg-surface-2 text-gray-500"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    onClick={() => {
+                      setActiveRunId(profile.id);
+                      onSelect(profile.id);
+                    }}
+                  >
+                    <StatusIndicator status={profile.status} />
+                    <span className="truncate text-sm font-medium text-gray-100">{profile.name}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onStop(profile.id);
+                    }}
+                    className="p-1 text-gray-500 hover:text-gray-200"
+                    title="停止"
+                  >
+                    <Square className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {activePreview && (
+              <ProfileEmbeddedViewer
+                key={activePreview.id}
+                profileId={activePreview.id}
+                className="h-[min(64vh,720px)] min-h-[420px] rounded-b-md border-x border-b border-border"
+                lazy={false}
+              />
+            )}
           </section>
         )}
 

@@ -97,6 +97,9 @@ _mgr = BrowserManager()
 def test_build_args_always_includes_base():
     args = _mgr._build_fingerprint_args({})
     assert "--disable-infobars" in args
+    assert "--no-default-browser-check" in args
+    assert "--no-first-run" in args
+    assert "--password-store=basic" in args
     assert "--test-type" in args
     assert "--use-angle=swiftshader" in args
 
@@ -138,8 +141,7 @@ def test_build_args_screen():
 
 def test_build_args_empty_profile():
     args = _mgr._build_fingerprint_args({})
-    # Only the 3 base args
-    assert len(args) == 3
+    assert not any(a.startswith("--fingerprint=") for a in args)
 
 
 # ── launch_args appended to extra_args ────────────────────────────────────────

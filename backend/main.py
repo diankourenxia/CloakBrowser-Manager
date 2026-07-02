@@ -197,6 +197,7 @@ def _profile_response(profile: dict) -> ProfileResponse:
     status = browser_mgr.get_status(profile["id"])
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
+    profile["display"] = status["display"]
     profile["cdp_url"] = status["cdp_url"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     return ProfileResponse(**profile)
