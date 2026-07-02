@@ -164,5 +164,15 @@ class ClipboardRequest(BaseModel):
     text: str = Field(max_length=1_048_576)  # 1MB max
 
 
+class ProfileUploadFile(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    data_base64: str
+    mime_type: str | None = None
+
+
+class ProfileUploadRequest(BaseModel):
+    files: list[ProfileUploadFile] = Field(min_length=1, max_length=20)
+
+
 class LoginRequest(BaseModel):
     token: str

@@ -402,6 +402,48 @@ def test_get_clipboard_from_page(app_client: TestClient):
     main.browser_mgr.running.pop(pid, None)
 
 
+# ── File Upload ──────────────────────────────────────────────────────────────
+
+
+def test_upload_files_not_running(app_client: TestClient):
+    resp = app_client.post("/api/profiles/nonexistent/files", json={
+        "files": [{"name": "image.png", "data_base64": "aGk=", "mime_type": "image/png"}],
+    })
+    assert resp.status_code == 404
+
+
+def test_upload_files_sets_current_page_file_input(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "Uploader"})
+    pid = create.json()["id"]
+
+    mock_running = MagicMock(spec=RunningProfile)
+    mock_running.display = None
+    mock_running.cdp_port = 5100
+    main.browser_mgr.running[pid] = mock_running
+
+    mock_input = MagicMock()
+    mock_input.get_attribute = AsyncMock(return_value=None)
+    mock_input.set_input_files = AsyncMock()
+
+    mock_locator = MagicMock()
+    mock_locator.count = AsyncMock(return_value=1)
+    mock_locator.nth = MagicMock(return_value=mock_input)
+
+    mock_page = MagicMock()
+    mock_page.locator = MagicMock(return_value=mock_locator)
+
+    with patch("backend.main._get_screencast_page", AsyncMock(return_value=mock_page)):
+        resp = app_client.post(f"/api/profiles/{pid}/files", json={
+            "files": [{"name": "image.png", "data_base64": "aGk=", "mime_type": "image/png"}],
+        })
+
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True, "count": 1}
+    mock_input.set_input_files.assert_awaited_once()
+
+    main.browser_mgr.running.pop(pid, None)
+
+
 # ── Response shape ───────────────────────────────────────────────────────────
 
 

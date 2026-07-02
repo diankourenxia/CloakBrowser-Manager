@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { KeyboardEvent, PointerEvent, WheelEvent } from "react";
-import { resolveWebSocketUrl } from "../lib/api";
+import type { ChangeEvent, ClipboardEvent, CompositionEvent, KeyboardEvent, PointerEvent, WheelEvent } from "react";
+import { Upload } from "lucide-react";
+import { api, resolveWebSocketUrl } from "../lib/api";
 
 interface Frame {
   image: string;
@@ -55,9 +56,11 @@ export function ProfileEmbeddedViewer({
 }: ProfileEmbeddedViewerProps) {
   const wsRef = useRef<WebSocket | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [frame, setFrame] = useState<Frame | null>(null);
   const [connected, setConnected] = useState(false);
   const [isVisible, setIsVisible] = useState(!lazy);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!lazy) {
@@ -178,6 +181,33 @@ export function ProfileEmbeddedViewer({
     send({ type: "press", key: keyCombo(event) });
   };
 
+  const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    const text = event.clipboardData.getData("text/plain");
+    if (!text) return;
+    event.preventDefault();
+    send({ type: "text", text });
+  };
+
+  const handleCompositionEnd = (event: CompositionEvent<HTMLDivElement>) => {
+    if (!event.data) return;
+    send({ type: "text", text: event.data });
+  };
+
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    if (files.length === 0) return;
+
+    setUploadMessage("上传中...");
+    try {
+      const result = await api.uploadProfileFiles(profileId, files);
+      setUploadMessage(`已上传 ${result.count} 个文件`);
+      window.setTimeout(() => setUploadMessage(null), 2400);
+    } catch (err) {
+      setUploadMessage(err instanceof Error ? err.message : "上传失败");
+    }
+  };
+
   return (
     <div
       ref={rootRef}
@@ -188,8 +218,40 @@ export function ProfileEmbeddedViewer({
       onPointerUp={handlePointerUp}
       onWheel={handleWheel}
       onKeyDown={handleKeyDown}
+      onPaste={handlePaste}
+      onCompositionEnd={handleCompositionEnd}
       onContextMenu={(event) => event.preventDefault()}
     >
+      <div
+        className="absolute right-2 top-2 z-10 flex items-center gap-2"
+        onPointerDown={(event) => event.stopPropagation()}
+        onPointerMove={(event) => event.stopPropagation()}
+        onPointerUp={(event) => event.stopPropagation()}
+        onWheel={(event) => event.stopPropagation()}
+      >
+        {uploadMessage && (
+          <span className="rounded bg-black/75 px-2 py-1 text-xs text-gray-200">
+            {uploadMessage}
+          </span>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,video/*,audio/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="flex items-center gap-1 rounded bg-black/75 px-2 py-1 text-xs text-gray-100 hover:bg-black/90"
+          title="上传图片、视频或音频素材"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          <span>上传素材</span>
+        </button>
+      </div>
       {frame ? (
         <img
           src={frame.image}

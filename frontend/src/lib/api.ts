@@ -135,6 +135,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   "Already stopped": "账号已经停止",
   "Failed to launch browser": "启动浏览器失败",
   "Native browser clipboard sync is not available": "本机窗口模式不支持远程剪贴板同步",
+  "No file upload field found on the current page": "当前页面还没有可用的上传入口",
+  "File upload field is not ready": "上传入口还没准备好，请先点页面里的上传按钮",
+  "Selected files are too large": "选择的文件太大",
   "Internal Server Error": "服务出错",
 };
 
@@ -165,6 +168,18 @@ async function request<T>(
     throw new ApiError(res.status, friendlyErrorMessage(body.detail || res.statusText));
   }
   return res.json();
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("读取文件失败"));
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      resolve(result.includes(",") ? result.split(",", 2)[1] ?? "" : result);
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 export const api = {
@@ -241,4 +256,18 @@ export const api = {
 
   getClipboard: (id: string) =>
     request<{ text: string }>(`/api/profiles/${id}/clipboard`),
+
+  uploadProfileFiles: async (id: string, files: File[]) => {
+    const payload = {
+      files: await Promise.all(files.map(async (file) => ({
+        name: file.name,
+        mime_type: file.type || null,
+        data_base64: await fileToBase64(file),
+      }))),
+    };
+    return request<{ ok: boolean; count: number }>(`/api/profiles/${id}/files`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
 };

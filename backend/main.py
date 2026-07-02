@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import hmac
 import logging
 import os
 import struct
 import shutil
+import tempfile
+import uuid
 from contextlib import asynccontextmanager
 from http.cookies import SimpleCookie
 from pathlib import Path
@@ -39,6 +42,7 @@ from .models import (
     ProfileResponse,
     ProfileStatusResponse,
     ProfileUpdate,
+    ProfileUploadRequest,
     StatusResponse,
     TagResponse,
 )
@@ -646,6 +650,8 @@ async def get_system_status():
 # ── Clipboard Relay ──────────────────────────────────────────────────────────
 
 _CLIPBOARD_MAX_READ = 1_048_576  # 1MB cap on GET response
+_UPLOAD_MAX_BYTES = int(os.environ.get("PROFILE_UPLOAD_MAX_BYTES", str(100 * 1024 * 1024)))
+_UPLOAD_DIR = Path(tempfile.gettempdir()) / "cloakbrowser-manager-uploads"
 
 # Track xclip processes per display so we can kill the old one before spawning new
 _xclip_procs: dict[int, asyncio.subprocess.Process] = {}
@@ -738,6 +744,54 @@ async def get_clipboard(profile_id: str):
 
     text = stdout[:_CLIPBOARD_MAX_READ].decode("utf-8", errors="replace")
     return {"text": text}
+
+
+@app.post("/api/profiles/{profile_id}/files")
+async def upload_profile_files(profile_id: str, body: ProfileUploadRequest):
+    """Attach selected local files to the current page's file input."""
+    running = browser_mgr.running.get(profile_id)
+    if not running:
+        raise HTTPException(status_code=404, detail="Profile not running")
+
+    profile_upload_dir = _UPLOAD_DIR / profile_id
+    profile_upload_dir.mkdir(parents=True, exist_ok=True)
+
+    saved_paths: list[str] = []
+    total_bytes = 0
+    for upload in body.files:
+        try:
+            data = base64.b64decode(upload.data_base64.split(",", 1)[-1], validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid file data: {upload.name}") from exc
+
+        total_bytes += len(data)
+        if total_bytes > _UPLOAD_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="Selected files are too large")
+
+        safe_name = Path(upload.name).name or "upload.bin"
+        target = profile_upload_dir / f"{uuid.uuid4().hex}-{safe_name}"
+        target.write_bytes(data)
+        saved_paths.append(str(target))
+
+    page = await _get_screencast_page(running)
+    file_inputs = page.locator('input[type="file"]')
+    count = await file_inputs.count()
+    if count == 0:
+        raise HTTPException(status_code=400, detail="No file upload field found on the current page")
+
+    last_error: Exception | None = None
+    for index in range(count - 1, -1, -1):
+        file_input = file_inputs.nth(index)
+        try:
+            multiple = await file_input.get_attribute("multiple", timeout=1_000)
+            selected_paths = saved_paths if multiple is not None or len(saved_paths) == 1 else saved_paths[:1]
+            await file_input.set_input_files(selected_paths, timeout=5_000)
+            return {"ok": True, "count": len(selected_paths)}
+        except Exception as exc:
+            last_error = exc
+
+    logger.debug("File upload failed for %s: %s", profile_id, last_error)
+    raise HTTPException(status_code=400, detail="File upload field is not ready")
 
 
 # ── VNC WebSocket Proxy ──────────────────────────────────────────────────────
